@@ -1,0 +1,149 @@
+# Arquitectura
+
+Frontend en **TypeScript vanilla orientado a objetos**, sin framework de UI. Vite hace de bundler y servidor de desarrollo.
+
+## Flujo de arranque
+
+```
+index.html ──► <link> src/styles/main.scss        (único punto de entrada de estilos)
+    │
+    └──► <script> main.ts                        (raíz de composición)
+              │  registra módulos en el Container
+              │    SharedModule → HeroModule → … → AppModule
+              ▼
+          App.mount(#root)                        (src/app/App.ts)
+              │  compone las features
+              ▼
+          HeroComponent, …                        (src/features/*)
+```
+
+- `index.html` solo contiene `<div id="root">`, el enlace a `main.scss` y el script `main.ts`.
+- `main.ts` crea el `Container`, registra cada `FeatureModule` y monta `App`. Es el **único** lugar que ejecuta código fuera de una clase (`new Main().start()`).
+- `App` es un `Component` que solo monta las features. No tiene lógica.
+
+## Estructura de carpetas
+
+```
+portfolio-web/
+├── index.html
+├── main.ts                      raíz de composición
+├── public/                      archivos estáticos servidos tal cual (datos mock, modelos .glb, HDRI)
+│   └── data/profile.json
+├── src/
+│   ├── app/
+│   │   ├── App.ts               contenedor principal
+│   │   └── AppModule.ts         registra App
+│   ├── features/
+│   │   └── <feature>/
+│   │       ├── <Feature>Module.ts   registra api, services y componentes de la feature
+│   │       ├── components/          clases de UI: DOM + eventos
+│   │       ├── services/            lógica de negocio (sin DOM)
+│   │       ├── api/                 solo fetch al backend
+│   │       └── models/              interfaces/tipos de datos
+│   ├── shared/
+│   │   ├── SharedModule.ts      registra dependencias compartidas
+│   │   ├── api/                 HttpClient, HttpError
+│   │   ├── config/              Environment
+│   │   ├── core/
+│   │   │   ├── component/       Component (clase base)
+│   │   │   ├── di/              Container, FeatureModule, Provider, …
+│   │   │   └── dom/             ElementBuilder
+│   │   ├── components/          componentes reutilizados por varias features  (se crean
+│   │   ├── services/            services reutilizados por varias features      cuando haga
+│   │   └── models/              tipos compartidos                             falta)
+│   ├── styles/                  Sass (ver convenciones)
+│   └── types/                   declaraciones globales (.d.ts)
+├── tools/eslint/                plugin ESLint local con reglas de arquitectura
+├── docker/nginx.conf
+├── Dockerfile · docker-compose.yml
+└── docs/
+```
+
+## Capas y dependencias permitidas
+
+```
+components ──► services ──► api ──► shared/api/HttpClient ──► fetch
+    │              │
+    └──── models ◄─┘
+```
+
+| Capa         | Responsabilidad                              | Puede usar                               | No puede usar                              |
+| ------------ | -------------------------------------------- | ---------------------------------------- | ------------------------------------------ |
+| `components` | Crear DOM, escuchar eventos, pintar datos    | services (inyectados), models, `@shared` | `api`                                      |
+| `services`   | Lógica de negocio, cálculos, orquestar api   | api (inyectada), models, `@shared`       | `document`, `window`, components           |
+| `api`        | Solo peticiones HTTP y mapeo de la respuesta | `HttpClient`, models                     | `document`, `window`, services, components |
+| `models`     | Interfaces y tipos                           | —                                        | —                                          |
+| `shared`     | Lo que usan 2 o más features                 | `@shared`                                | `@features`, `@app`                        |
+| `app`        | Componer features                            | `@features`, `@shared`                   | —                                          |
+
+Una feature **nunca** importa otra feature. Si dos features necesitan lo mismo, se mueve a `shared`. Todas estas reglas las verifica ESLint (ver [convenciones](./conventions.md)).
+
+## Inyección de dependencias
+
+- Todas las dependencias se reciben **por constructor**. Ninguna clase hace `new` de sus dependencias ni conoce el `Container`.
+- Cada feature expone un `<Feature>Module` que implementa `FeatureModule` y registra sus clases:
+
+```ts
+container
+  .singleton(ProfileApi, (c) => new ProfileApi(c.resolve(HttpClient)))
+  .singleton(ProfileService, (c) => new ProfileService(c.resolve(ProfileApi)))
+  .transient(HeroComponent, (c) => new HeroComponent(c.resolve(ProfileService)));
+```
+
+- La llave es la propia clase (`ServiceKey<T>`), así que una clase **abstracta** puede registrarse con una implementación concreta (útil para cambiar el mock de `public/data` por el backend real sin tocar los services).
+- `singleton`: una instancia compartida (api, services). `transient`: nueva instancia por resolución (componentes).
+
+## Componentes
+
+`Component<TElement>` (Template Method + Composite):
+
+| Método         | Sección                                                             | Obligatorio                               |
+| -------------- | ------------------------------------------------------------------- | ----------------------------------------- |
+| `render()`     | DOM: construye y devuelve el elemento raíz con `ElementBuilder`     | Sí (abstracto)                            |
+| `bindEvents()` | Eventos: registra listeners con `this.listen(...)`                  | Sí (abstracto; vacío si no tiene eventos) |
+| `onMount()`    | Hook opcional tras insertarse en el DOM: cargar datos, montar hijos | No                                        |
+| `unmount()`    | Libera listeners (AbortController), desmonta hijos y retira el DOM  | Heredado                                  |
+
+Los listeners registrados con `listen` se eliminan solos al desmontar, así que no hay fugas de memoria. Los hijos se montan con `mountChild` para compartir el ciclo de vida del padre.
+
+## Patrones de diseño usados
+
+| Patrón                                       | Dónde                                                     |
+| -------------------------------------------- | --------------------------------------------------------- |
+| Inyección de dependencias / Composition Root | `Container`, `main.ts`, `*Module`                         |
+| Template Method                              | `Component.mount()` → `render` / `bindEvents` / `onMount` |
+| Composite                                    | `Component.mountChild` / `unmount` en cascada             |
+| Builder                                      | `ElementBuilder`                                          |
+| Module                                       | `FeatureModule` por feature                               |
+| Repository (capa api)                        | `ProfileApi` aísla el origen de datos                     |
+
+## Capa 3D
+
+```
+DioramaComponent (DOM + eventos)
+      │ usa
+      ▼
+DioramaExperience (Facade) ──► Stage ──► PostProcessing (bloom, AgX, lente, grano)
+      │                    ├─► RenderLoop ──► Updatable[] (CameraRig, AdaptiveResolution, objetos animados)
+      │                    ├─► PointerPicker<HotspotMarker>
+      │                    └─► PowerOnSequence (GSAP)
+      ▼
+DioramaScene (Composite) ──► SceneObject[]  (Island, Stall, Lantern, NeonSign, Rain, …)
+      └─ MaterialLibrary (Flyweight) · CanvasTextureFactory (Factory) · SeededRandom
+```
+
+| Clase                     | Responsabilidad                                                                                                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `SceneObject`             | Base de cada pieza 3D: `build()` crea su geometría en `root`; `dispose()` libera GPU. Equivalente 3D de `Component`. |
+| `Updatable` / `Powerable` | Contratos para animarse por frame y para encenderse en la intro.                                                     |
+| `DioramaScene`            | Crea las piezas, decide qué se anima, el orden de encendido y los puntos interactivos.                               |
+| `CameraRig`               | Recorre una curva Catmull-Rom entre encuadres según el progreso del scroll, con amortiguación y paralaje.            |
+| `PowerOnSequence`         | Línea de tiempo de la intro: vuelo de cámara + encendidos (fade o arranque de neón).                                 |
+| `AdaptiveResolution`      | Mide FPS reales y baja la resolución interna si el equipo no llega a 50 FPS.                                         |
+| `QualityDetector`         | Perfil alto/bajo: reflejos, MSAA, gotas de lluvia y `pixelRatio`.                                                    |
+
+Todo es procedural (sin modelos descargados) y determinista (`SeededRandom`). Para reemplazar una pieza por un `.glb`, se crea otro `SceneObject` que lo cargue en `build()` y se cambia en `DioramaScene`.
+
+## Pendiente de definir
+
+Ver la sección "Qué falta" en [stack tecnológico](./tech-stack.md#qué-falta-en-la-arquitectura).
