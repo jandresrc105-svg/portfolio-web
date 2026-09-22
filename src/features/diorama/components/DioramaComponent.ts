@@ -5,6 +5,7 @@ import type { SmoothScroll } from '@shared/core/scroll/SmoothScroll';
 import type { DioramaExperience } from '../experience/DioramaExperience';
 import type { DioramaExperienceFactory } from '../experience/DioramaExperienceFactory';
 import type { BootScreenComponent } from './BootScreenComponent';
+import type { SoundToggleComponent } from './SoundToggleComponent';
 
 /**
  * Fondo 3D del portafolio. Maneja el canvas, el tooltip de los marcadores y los eventos del usuario;
@@ -36,12 +37,14 @@ export class DioramaComponent extends Component {
    * @param scroll Scroll suave compartido.
    * @param events Bus de eventos de la aplicación.
    * @param boot Pantalla de arranque.
+   * @param soundToggle Botón de sonido.
    */
   public constructor(
     private readonly factory: DioramaExperienceFactory,
     private readonly scroll: SmoothScroll,
     private readonly events: AppEventBus,
     private readonly boot: BootScreenComponent,
+    private readonly soundToggle: SoundToggleComponent,
   ) {
     super();
   }
@@ -90,14 +93,15 @@ export class DioramaComponent extends Component {
   }
 
   /**
-   * Arranca la experiencia: pantalla de arranque y compilación en paralelo, luego la intro.
+   * Arranca la experiencia: sonido, consola de arranque mientras compila la escena, y la intro.
    */
   private async start(): Promise<void> {
     this.scroll.start();
     this.scroll.lock();
+    this.factory.startSound();
     try {
       const experience = this.createExperience();
-      await Promise.all([this.boot.play(), this.prepare(experience)]);
+      await this.boot.play(this.prepare(experience));
       await this.boot.dismiss();
       this.unsubscribe = this.scroll.onProgress((progress) => {
         experience.setScroll(progress);
@@ -136,11 +140,12 @@ export class DioramaComponent extends Component {
   }
 
   /**
-   * Libera el scroll y avisa al resto de la app que la intro terminó.
+   * Libera el scroll, muestra el botón de sonido y avisa al resto de la app que la intro terminó.
    */
   private finish(): void {
     this.scroll.unlock();
     this.element.classList.add('diorama--ready');
+    this.mountChild(this.soundToggle, document.body);
     this.events.emit('introComplete', undefined);
   }
 
@@ -177,6 +182,7 @@ export class DioramaComponent extends Component {
     this.track(event);
     const hotspot = this.experience?.hover();
     if (hotspot) {
+      this.experience?.select();
       this.scroll.scrollTo(hotspot.sectionId);
     }
   }
