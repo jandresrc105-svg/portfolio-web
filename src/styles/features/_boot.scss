@@ -1,0 +1,72 @@
+@use '../abstracts' as *;
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: $z-boot;
+  display: grid;
+  place-items: center;
+  padding: $space-lg;
+  background: #000;
+  transition:
+    opacity 0.9s ease,
+    visibility 0.9s ease;
+
+  &--hidden {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  &__terminal {
+    width: min(34rem, 100%);
+    color: $color-terminal;
+    font-family: $font-mono;
+    font-size: clamp(0.72rem, 2.6vw, 0.88rem);
+    text-shadow: 0 0 8px rgba($color-terminal, 0.55);
+  }
+
+  &__log {
+    display: grid;
+    gap: $space-xs;
+    min-height: 9.5rem;
+  }
+
+  &__line {
+    display: flex;
+    justify-content: space-between;
+    gap: $space-md;
+    animation: boot-line 0.25s steps(4) both;
+  }
+
+  &__status {
+    color: $color-lantern;
+    text-shadow: 0 0 8px rgba($color-lantern, 0.6);
+  }
+
+  &__bar {
+    height: 2px;
+    margin-top: $space-md;
+    background: rgba($color-terminal, 0.15);
+  }
+
+  &__progress {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: $color-terminal;
+    box-shadow: 0 0 12px $color-terminal;
+    transition: width 0.3s ease;
+  }
+}
+
+@keyframes boot-line {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
