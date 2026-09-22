@@ -1,0 +1,39 @@
+@use '../abstracts' as *;
+
+html {
+  background: $color-night;
+
+  &.lenis {
+    height: auto;
+  }
+
+  &.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+
+  &.lenis-stopped {
+    overflow: hidden;
+  }
+}
+
+body {
+  min-height: 100dvh;
+  background: $color-night;
+  color: $color-text;
+  font-family: $font-body;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+
+  &.is-pointing {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: $color-neon;
+    color: $color-night;
+  }
+}
+
+a {
+  color: inherit;
+}
