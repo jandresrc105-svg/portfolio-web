@@ -1,4 +1,4 @@
-import { Mesh, MeshStandardMaterial, Shape, ShapeGeometry, type BufferGeometry } from 'three';
+import { Mesh, MeshStandardMaterial, Shape, ShapeGeometry, type BufferGeometry, type Camera } from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
@@ -19,8 +19,10 @@ export class Puddles extends SceneObject {
   private static readonly OUTLINE_POINTS = 18;
   private static readonly WOBBLE = 0.18;
   private static readonly HEIGHT = 0.004;
-  private static readonly REFLECTION = { color: 0x8a90a6, resolution: 0.5, clipBias: 0.003 };
+  private static readonly REFLECTION = { color: 0x8a90a6, resolution: 0.4, clipBias: 0.003 };
   private static readonly FALLBACK = { color: 0x0a0b10, roughness: 0.04, metalness: 0.9 };
+
+  private surface: Mesh | Reflector | null = null;
 
   /**
    * Crea los charcos.
@@ -36,13 +38,26 @@ export class Puddles extends SceneObject {
   }
 
   /**
+   * Limita el reflejo a una sola capa (los objetos luminosos). En un charco de noche solo se distinguen
+   * las luces, y reflejar la escena completa costaba tanto como dibujarla dos veces.
+   *
+   * @param camera Cámara principal, de la que el reflector clona su cámara de reflejo.
+   * @param layer Única capa que se refleja.
+   */
+  public reflectOnly(camera: Camera, layer: number): void {
+    if (this.surface instanceof Reflector) {
+      this.surface.getReflectionCamera(camera).layers.set(layer);
+    }
+  }
+
+  /**
    * @inheritdoc
    */
   protected override build(): void {
     const geometry = this.geometry();
-    const mesh = this.reflections ? Puddles.mirror(geometry) : Puddles.polished(geometry);
-    mesh.rotation.x = -Math.PI / 2;
-    this.add(mesh, { x: 0, y: Puddles.HEIGHT, z: 0 });
+    this.surface = this.reflections ? Puddles.mirror(geometry) : Puddles.polished(geometry);
+    this.surface.rotation.x = -Math.PI / 2;
+    this.add(this.surface, { x: 0, y: Puddles.HEIGHT, z: 0 });
   }
 
   /**
