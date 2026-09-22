@@ -19,6 +19,7 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
 
   private readonly material = new MeshBasicMaterial({ transparent: true, depthWrite: false });
   private readonly light: PointLight;
+  private readonly mirrors: Powerable[] = [];
   private level = 0;
   private flickerUntil = 0;
 
@@ -45,6 +46,15 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
   }
 
   /**
+   * Replica el brillo real del tubo (incluidos los parpadeos) en otro elemento, p. ej. su zumbido.
+   *
+   * @param target Elemento que sigue al letrero.
+   */
+  public mirror(target: Powerable): void {
+    this.mirrors.push(target);
+  }
+
+  /**
    * @inheritdoc
    */
   public update(_delta: number, elapsed: number): void {
@@ -65,8 +75,10 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
     this.material.map = this.own(this.texture());
     const sign = this.add(new Mesh(new PlaneGeometry(size.width, size.height), this.material), position);
     sign.rotation.y = rotationY;
-    this.light.position.set(0, 0, NeonSign.LIGHT_OFFSET).applyEuler(sign.rotation).add(sign.position);
-    this.add(this.light);
+    if (this.options.lightIntensity > 0) {
+      this.light.position.set(0, 0, NeonSign.LIGHT_OFFSET).applyEuler(sign.rotation).add(sign.position);
+      this.add(this.light);
+    }
     this.setPower(0);
   }
 
@@ -78,6 +90,9 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
   private apply(level: number): void {
     this.material.color.setScalar(Math.max(level * NeonSign.GLOW, NeonSign.OFF_GLOW));
     this.light.intensity = level * this.options.lightIntensity;
+    this.mirrors.forEach((mirror) => {
+      mirror.setPower(level);
+    });
   }
 
   /**

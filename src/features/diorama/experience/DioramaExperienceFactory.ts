@@ -1,4 +1,6 @@
+import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { QualityDetector } from '@shared/engine/QualityDetector';
+import { Soundscape } from '../audio/Soundscape';
 import type { SignalService } from '../services/SignalService';
 import { CanvasTextureFactory } from '../scene/CanvasTextureFactory';
 import { DioramaExperience } from './DioramaExperience';
@@ -18,10 +20,12 @@ export class DioramaExperienceFactory {
    *
    * @param quality Detector de capacidad del dispositivo.
    * @param signal Service del lazo de control.
+   * @param audio Motor de audio compartido.
    */
   public constructor(
     private readonly quality: QualityDetector,
     private readonly signal: SignalService,
+    private readonly audio: AudioEngine,
   ) {}
 
   /**
@@ -43,6 +47,13 @@ export class DioramaExperienceFactory {
   }
 
   /**
+   * Arranca el audio: suena de inmediato si el navegador lo permite o con la primera interacción del visitante.
+   */
+  public startSound(): void {
+    this.audio.start();
+  }
+
+  /**
    * Precarga las fuentes usadas en las texturas de canvas; si fallan se usan las del sistema.
    *
    * @returns Promesa que se resuelve cuando las fuentes están listas o fallaron.
@@ -61,6 +72,6 @@ export class DioramaExperienceFactory {
    * @returns Experiencia lista para preparar.
    */
   public create(canvas: HTMLCanvasElement): DioramaExperience {
-    return new DioramaExperience(canvas, this.quality.detect(), this.signal);
+    return new DioramaExperience(canvas, this.quality.detect(), this.signal, new Soundscape(this.audio));
   }
 }

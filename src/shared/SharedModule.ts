@@ -1,4 +1,5 @@
 import { HttpClient } from './api/HttpClient';
+import { AudioEngine } from './audio/AudioEngine';
 import { Environment } from './config/Environment';
 import type { Container } from './core/di/Container';
 import type { FeatureModule } from './core/di/FeatureModule';
@@ -19,6 +20,7 @@ export class SharedModule implements FeatureModule {
       .singleton(HttpClient, (c) => new HttpClient(c.resolve(Environment)))
       .singleton(AppEventBus, () => new AppEventBus())
       .singleton(SmoothScroll, () => new SmoothScroll())
-      .singleton(QualityDetector, () => new QualityDetector());
+      .singleton(QualityDetector, () => new QualityDetector())
+      .singleton(AudioEngine, () => new AudioEngine());
   }
 }
