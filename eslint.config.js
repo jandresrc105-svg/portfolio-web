@@ -132,6 +132,7 @@ export default tseslint.config(
         { selector: 'objectLiteralProperty', modifiers: ['requiresQuotes'], format: null },
         { selector: 'typeProperty', filter: { regex: '^VITE_', match: true }, format: ['UPPER_CASE'] },
         { selector: 'variableLike', format: ['camelCase'], leadingUnderscore: 'allow' },
+        { selector: 'variable', modifiers: ['destructured'], format: ['camelCase', 'UPPER_CASE'] },
       ],
 
       'jsdoc/require-jsdoc': [
