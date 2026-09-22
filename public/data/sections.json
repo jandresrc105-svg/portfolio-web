@@ -1,0 +1,114 @@
+[
+  {
+    "id": "sobre-mi",
+    "eyebrow": "01 — Sobre mí",
+    "title": "Del circuito al navegador",
+    "align": "left",
+    "paragraphs": [
+      "Soy ingeniero electrónico con énfasis en automatización y control. Aprendí a pensar en sistemas: entradas, salidas, realimentación y estabilidad.",
+      "Hace más de dos años llevé esa forma de pensar al desarrollo web. Construyo interfaces con arquitectura limpia, programación orientada a objetos y patrones de diseño, y me apasiona llevar la web al 3D."
+    ],
+    "tags": ["Ingeniería electrónica", "Automatización", "Control", "Desarrollo web"]
+  },
+  {
+    "id": "proyectos",
+    "eyebrow": "02 — Proyectos",
+    "title": "Lo que he construido",
+    "align": "left",
+    "paragraphs": ["Cada lata de la máquina es un proyecto. Estos son algunos de los que más disfruté."],
+    "items": [
+      {
+        "title": "Portafolio 3D",
+        "meta": "2026 · Personal",
+        "description": "Este sitio: diorama procedural en Three.js, lluvia calculada en GPU, reflejos planares y una arquitectura POO con inyección de dependencias.",
+        "tags": ["TypeScript", "Three.js", "GSAP", "Sass"],
+        "link": {
+          "label": "Ver código",
+          "href": "https://github.com/jandresrc105-svg/portfolio-web"
+        }
+      },
+      {
+        "title": "Proyecto destacado",
+        "meta": "Año · Contexto",
+        "description": "Reemplaza este texto con el problema que resolviste, cómo lo hiciste y el resultado medible.",
+        "tags": ["Tecnología", "Tecnología"]
+      },
+      {
+        "title": "Proyecto de automatización",
+        "meta": "Año · Contexto",
+        "description": "Un proyecto donde se cruzan la electrónica y el software: control, sensores, dashboards o IoT.",
+        "tags": ["Control", "Hardware"]
+      }
+    ]
+  },
+  {
+    "id": "habilidades",
+    "eyebrow": "03 — Habilidades",
+    "title": "Señal estable, respuesta rápida",
+    "align": "left",
+    "paragraphs": [
+      "La traza del osciloscopio no es un video: es un lazo de control simulado en vivo. La referencia es una onda cuadrada y la salida, la respuesta de un sistema de segundo orden con su sobrepico y asentamiento."
+    ],
+    "items": [
+      {
+        "title": "Frontend",
+        "description": "Interfaces mantenibles con tipado estricto y arquitectura por features.",
+        "tags": ["TypeScript", "JavaScript", "HTML", "Sass"]
+      },
+      {
+        "title": "Gráficos y animación",
+        "description": "Escenas 3D, shaders y animaciones ligadas al scroll.",
+        "tags": ["Three.js", "WebGL", "GLSL", "GSAP"]
+      },
+      {
+        "title": "Ingeniería",
+        "description": "Sistemas de control, automatización e instrumentación.",
+        "tags": ["Control", "PID", "Automatización", "Electrónica"]
+      }
+    ]
+  },
+  {
+    "id": "experiencia",
+    "eyebrow": "04 — Experiencia",
+    "title": "Trayectoria",
+    "align": "right",
+    "paragraphs": ["El tablero del poste guarda el registro de por dónde ha pasado la corriente."],
+    "items": [
+      {
+        "title": "Desarrollador web",
+        "meta": "2024 — Actualidad",
+        "description": "Reemplaza con la empresa, tu rol y dos o tres logros concretos.",
+        "tags": ["TypeScript", "Frontend"]
+      },
+      {
+        "title": "Ingeniero electrónico",
+        "meta": "Formación",
+        "description": "Énfasis en automatización y control.",
+        "tags": ["Automatización", "Control"]
+      }
+    ]
+  },
+  {
+    "id": "contacto",
+    "eyebrow": "05 — Contacto",
+    "title": "¿Hablamos?",
+    "align": "left",
+    "paragraphs": [
+      "Si tienes un proyecto, una vacante o simplemente quieres hablar de 3D, control o ramen, deja un mensaje en el buzón."
+    ],
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/jandresrc105-svg"
+      },
+      {
+        "label": "LinkedIn",
+        "href": "https://www.linkedin.com/"
+      },
+      {
+        "label": "Correo",
+        "href": "mailto:tu-correo@ejemplo.com"
+      }
+    ]
+  }
+]
