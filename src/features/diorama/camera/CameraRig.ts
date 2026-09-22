@@ -33,6 +33,8 @@ export class CameraRig implements Updatable {
   private readonly target = new Vector3().copy(CameraRig.INTRO.target);
   private readonly desiredPosition = new Vector3();
   private readonly desiredTarget = new Vector3();
+  private readonly introPosition = new Vector3().copy(CameraRig.INTRO.position);
+  private readonly introTarget = new Vector3().copy(CameraRig.INTRO.target);
   private progress = 0;
 
   /**
@@ -82,16 +84,8 @@ export class CameraRig implements Updatable {
     this.targets.getPoint(this.progress, this.desiredTarget);
     this.pullBackForPortrait();
     if (this.intro < 1) {
-      this.desiredPosition.lerpVectors(
-        new Vector3().copy(CameraRig.INTRO.position),
-        this.desiredPosition,
-        this.intro,
-      );
-      this.desiredTarget.lerpVectors(
-        new Vector3().copy(CameraRig.INTRO.target),
-        this.desiredTarget,
-        this.intro,
-      );
+      this.desiredPosition.lerpVectors(this.introPosition, this.desiredPosition, this.intro);
+      this.desiredTarget.lerpVectors(this.introTarget, this.desiredTarget, this.intro);
       this.position.copy(this.desiredPosition);
       this.target.copy(this.desiredTarget);
     }

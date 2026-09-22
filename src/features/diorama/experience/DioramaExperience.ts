@@ -1,12 +1,17 @@
 import { SeededRandom } from '@shared/core/math/SeededRandom';
 import { AdaptiveResolution } from '@shared/engine/AdaptiveResolution';
 import { PointerPicker } from '@shared/engine/PointerPicker';
+import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
 import { RenderLoop } from '@shared/engine/RenderLoop';
 import { Stage } from '@shared/engine/Stage';
+import { AudibleSwitch } from '../audio/AudibleSwitch';
+import type { Soundscape } from '../audio/Soundscape';
 import { CameraRig } from '../camera/CameraRig';
 import { PowerOnSequence } from '../intro/PowerOnSequence';
 import type { Hotspot } from '../models/Hotspot';
+import { PowerMode } from '../models/PowerMode';
+import type { PowerStep } from '../models/PowerStep';
 import type { SignalService } from '../services/SignalService';
 import { CanvasTextureFactory } from '../scene/CanvasTextureFactory';
 import { DioramaScene } from '../scene/DioramaScene';
@@ -14,7 +19,7 @@ import { MaterialLibrary } from '../scene/MaterialLibrary';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
 
 /**
- * Orquesta la experiencia 3D (patrón Facade): escenario, diorama, cámara, bucle, intro e interacción.
+ * Orquesta la experiencia 3D (patrón Facade): escenario, diorama, cámara, bucle, intro, sonido e interacción.
  * El componente DOM solo le pasa eventos y tamaños.
  */
 export class DioramaExperience {
@@ -25,6 +30,7 @@ export class DioramaExperience {
   private readonly rig: CameraRig;
   private readonly loop: RenderLoop;
   private readonly picker = new PointerPicker<HotspotMarker>();
+  private readonly resolution: AdaptiveResolution;
   private hovered: HotspotMarker | null = null;
   private interactive = false;
 
@@ -34,24 +40,27 @@ export class DioramaExperience {
    * @param canvas Canvas donde se dibuja.
    * @param quality Perfil de calidad.
    * @param signal Service del lazo de control.
+   * @param sound Paisaje sonoro.
    */
-  public constructor(canvas: HTMLCanvasElement, quality: QualityProfile, signal: SignalService) {
+  public constructor(
+    canvas: HTMLCanvasElement,
+    quality: QualityProfile,
+    signal: SignalService,
+    private readonly sound: Soundscape,
+  ) {
     const random = new SeededRandom(DioramaExperience.SEED);
     this.stage = new Stage(canvas, quality);
-    this.diorama = new DioramaScene(
-      new MaterialLibrary(new CanvasTextureFactory(random)),
-      random,
-      quality,
-      signal,
-    );
+    const textures = new CanvasTextureFactory(random, this.stage.maxAnisotropy, quality.textureScale);
+    this.diorama = new DioramaScene(new MaterialLibrary(textures), textures, random, quality, signal);
     this.rig = new CameraRig(this.stage.camera);
+    this.resolution = new AdaptiveResolution(this.stage, quality.maxResolutionScale);
     this.loop = new RenderLoop(this.stage.renderer, () => {
       this.stage.render();
     });
   }
 
   /**
-   * Construye la escena, compila shaders y arranca el bucle.
+   * Construye la escena, conecta el sonido, compila shaders y arranca el bucle.
    *
    * @param width Ancho del viewport.
    * @param height Alto del viewport.
@@ -62,7 +71,9 @@ export class DioramaExperience {
     this.diorama.markers.forEach((marker) => {
       this.picker.register(marker.hitArea, marker);
     });
-    this.loop.add(this.rig, new AdaptiveResolution(this.stage), ...this.diorama.updatables);
+    this.connectSound();
+    this.diorama.puddles?.reflectOnly(this.stage.camera, RenderLayer.Reflected);
+    this.loop.add(this.rig, this.resolution, this.sound, ...this.diorama.updatables);
     this.resize(width, height);
     await this.stage.warmUp();
     this.loop.start();
@@ -75,7 +86,9 @@ export class DioramaExperience {
    * @returns Promesa que se resuelve al terminar la intro.
    */
   public async powerOn(instant: boolean): Promise<void> {
-    await new PowerOnSequence().play(this.rig, this.diorama.powerSteps, instant);
+    const steps = this.diorama.powerSteps.map((step) => this.withSound(step));
+    await new PowerOnSequence().play(this.rig, steps, instant);
+    this.resolution.release();
     this.interactive = true;
   }
 
@@ -100,7 +113,7 @@ export class DioramaExperience {
   }
 
   /**
-   * Detecta el marcador bajo el puntero y lo resalta.
+   * Detecta el marcador bajo el puntero, lo resalta y suena al entrar en uno nuevo.
    *
    * @returns Punto interactivo señalado o `null`.
    */
@@ -109,9 +122,19 @@ export class DioramaExperience {
     if (marker !== this.hovered) {
       this.hovered?.setHovered(false);
       marker?.setHovered(true);
+      if (marker) {
+        this.sound.hover();
+      }
       this.hovered = marker;
     }
     return marker?.hotspot ?? null;
+  }
+
+  /**
+   * Confirma la selección del marcador señalado con su sonido.
+   */
+  public select(): void {
+    this.sound.select();
   }
 
   /**
@@ -125,11 +148,39 @@ export class DioramaExperience {
   }
 
   /**
-   * Detiene el bucle y libera la GPU.
+   * Detiene el bucle y libera la GPU y el audio.
    */
   public dispose(): void {
     this.loop.stop();
+    this.sound.dispose();
     this.diorama.dispose();
     this.stage.dispose();
+  }
+
+  /**
+   * Conecta la escena con el paisaje sonoro: zumbido del neón y truenos de la tormenta.
+   */
+  private connectSound(): void {
+    this.diorama.mainSign?.mirror(this.sound.neon);
+    this.sound.follow(this.stage.camera, this.diorama.neonPosition);
+    this.diorama.storm?.onStrike((strength, delay) => {
+      this.sound.thunder(strength, delay);
+    });
+  }
+
+  /**
+   * Agrega el chasquido de relé a los elementos que arrancan como tubo (patrón Decorator).
+   *
+   * @param step Paso de encendido original.
+   * @returns Paso con sonido si corresponde.
+   */
+  private withSound(step: PowerStep): PowerStep {
+    if (step.mode !== PowerMode.Strike) {
+      return step;
+    }
+    const target = new AudibleSwitch(step.target, () => {
+      this.sound.click();
+    });
+    return { ...step, target };
   }
 }

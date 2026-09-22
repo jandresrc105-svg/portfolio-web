@@ -19,27 +19,37 @@ export class CanvasTextureFactory {
    * Crea la fábrica.
    *
    * @param random Generador determinista para el ruido.
+   * @param anisotropy Filtrado anisotrópico máximo de la GPU (nitidez en ángulos rasantes).
+   * @param supersample Factor de resolución real del canvas respecto a las medidas lógicas de dibujo.
    */
-  public constructor(private readonly random: SeededRandom) {}
+  public constructor(
+    private readonly random: SeededRandom,
+    private readonly anisotropy: number,
+    private readonly supersample: number,
+  ) {}
 
   /**
-   * Crea una textura a partir de una función de dibujo.
+   * Crea una textura a partir de una función de dibujo. Las medidas son lógicas: el canvas real
+   * es `supersample` veces más grande y se escala solo, así el código de dibujo no cambia.
    *
-   * @param width Ancho del canvas en píxeles.
-   * @param height Alto del canvas en píxeles.
+   * @param width Ancho lógico del canvas.
+   * @param height Alto lógico del canvas.
    * @param paint Función que dibuja sobre el contexto.
+   * @param scale Resolución del canvas; las texturas que se redibujan cada frame deben usar 1.
    * @returns Textura en espacio de color sRGB.
    */
   public paint(
     width: number,
     height: number,
     paint: (context: CanvasRenderingContext2D) => void,
+    scale = this.supersample,
   ): CanvasTexture {
-    const context = CanvasTextureFactory.context(width, height);
+    const context = CanvasTextureFactory.context(width * scale, height * scale);
+    context.scale(scale, scale);
     paint(context);
     const texture = new CanvasTexture(context.canvas);
     texture.colorSpace = SRGBColorSpace;
-    texture.anisotropy = 4;
+    texture.anisotropy = this.anisotropy;
     return texture;
   }
 

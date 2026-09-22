@@ -1,26 +1,28 @@
 import {
   BlendFunction,
   BloomEffect,
-  ChromaticAberrationEffect,
   EffectComposer,
   EffectPass,
   NoiseEffect,
   RenderPass,
+  SMAAEffect,
+  SMAAPreset,
   ToneMappingEffect,
   ToneMappingMode,
   VignetteEffect,
 } from 'postprocessing';
-import { HalfFloatType, Vector2, type Camera, type Scene, type WebGLRenderer } from 'three';
+import { HalfFloatType, type Camera, type Scene, type WebGLRenderer } from 'three';
 import type { QualityProfile } from './QualityProfile';
 
 /**
- * Cadena de post-procesado cinematográfico: bloom (neón), tone mapping, aberración cromática, viñeta y grano.
+ * Cadena de post-procesado cinematográfico: bloom (neón), tone mapping, y en una sola pasada
+ * antialiasing SMAA, viñeta y grano. Se usa SMAA en lugar de MSAA porque en GPUs integradas
+ * el MSAA sobre buffers HDR puede costar la mitad del frame.
  */
 export class PostProcessing {
   private static readonly BLOOM = { intensity: 2.1, threshold: 0.42, smoothing: 0.3, radius: 0.82 };
   private static readonly VIGNETTE = { offset: 0.28, darkness: 0.78 };
-  private static readonly GRAIN_OPACITY = 0.07;
-  private static readonly ABERRATION = 0.00055;
+  private static readonly GRAIN_OPACITY = 0.045;
 
   private readonly composer: EffectComposer;
 
@@ -41,7 +43,8 @@ export class PostProcessing {
     this.composer.addPass(
       new EffectPass(camera, PostProcessing.bloom(), new ToneMappingEffect({ mode: ToneMappingMode.AGX })),
     );
-    this.composer.addPass(new EffectPass(camera, ...PostProcessing.lens()));
+    const antialias = quality.smaa ? [new SMAAEffect({ preset: SMAAPreset.MEDIUM })] : [];
+    this.composer.addPass(new EffectPass(camera, ...antialias, ...PostProcessing.lens()));
   }
 
   /**
@@ -85,19 +88,14 @@ export class PostProcessing {
   }
 
   /**
-   * Efectos de lente aplicados después del tone mapping.
+   * Efectos de lente aplicados después del tone mapping, en la misma pasada que el antialiasing.
    *
-   * @returns Aberración cromática, viñeta y grano.
+   * @returns Viñeta y grano.
    */
-  private static lens(): [ChromaticAberrationEffect, VignetteEffect, NoiseEffect] {
-    const aberration = new ChromaticAberrationEffect({
-      offset: new Vector2(PostProcessing.ABERRATION, PostProcessing.ABERRATION),
-      radialModulation: true,
-      modulationOffset: 0.3,
-    });
+  private static lens(): [VignetteEffect, NoiseEffect] {
     const vignette = new VignetteEffect(PostProcessing.VIGNETTE);
     const grain = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: true });
     grain.blendMode.opacity.value = PostProcessing.GRAIN_OPACITY;
-    return [aberration, vignette, grain];
+    return [vignette, grain];
   }
 }

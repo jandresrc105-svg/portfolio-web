@@ -21,6 +21,17 @@ export abstract class SceneObject {
   }
 
   /**
+   * Agrega el objeto completo (incluidos sus hijos) a una capa de render adicional.
+   *
+   * @param layer Capa a habilitar.
+   */
+  public enableLayer(layer: number): void {
+    this.root.traverse((child) => {
+      child.layers.enable(layer);
+    });
+  }
+
+  /**
    * Libera todos los recursos de GPU del objeto.
    */
   public dispose(): void {

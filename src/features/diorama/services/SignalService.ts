@@ -1,5 +1,3 @@
-import type { SignalSample } from '../models/SignalSample';
-
 /**
  * Simula un lazo de control: la referencia es una onda cuadrada y la salida es la respuesta al escalón
  * de un sistema de segundo orden subamortiguado (sobrepico y asentamiento), como en un control PID bien sintonizado.
@@ -12,18 +10,12 @@ export class SignalService {
   private static readonly WINDOW_SECONDS = 6.4;
 
   /**
-   * Calcula la traza visible del osciloscopio que termina en el instante actual.
+   * Segundos de señal que caben en la pantalla del osciloscopio.
    *
-   * @param time Tiempo actual en segundos.
-   * @param samples Número de puntos de la traza.
-   * @returns Muestras de referencia y salida, de la más antigua a la más reciente.
+   * @returns Ancho de la ventana de tiempo.
    */
-  public trace(time: number, samples: number): SignalSample[] {
-    const start = time - SignalService.WINDOW_SECONDS;
-    return Array.from({ length: samples }, (_, index) => {
-      const instant = start + (index / (samples - 1)) * SignalService.WINDOW_SECONDS;
-      return { setpoint: this.setpoint(instant), output: this.output(instant) };
-    });
+  public get windowSeconds(): number {
+    return SignalService.WINDOW_SECONDS;
   }
 
   /**

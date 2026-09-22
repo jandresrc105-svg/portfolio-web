@@ -6,10 +6,18 @@ export interface QualityProfile {
   readonly tier: 'high' | 'low';
   /** Relación de píxeles máxima del renderer. */
   readonly pixelRatio: number;
-  /** Muestras de antialiasing del post-procesado (0 = desactivado). */
+  /** Muestras de antialiasing MSAA del post-procesado (0 = desactivado; costoso en GPUs integradas). */
   readonly multisampling: number;
+  /** Antialiasing SMAA por post-procesado (barato). */
+  readonly smaa: boolean;
   /** Habilita reflejos planares (charcos). */
   readonly reflections: boolean;
   /** Número de gotas de lluvia. */
   readonly rainDrops: number;
+  /** Número de edificios de la ciudad de fondo. */
+  readonly buildings: number;
+  /** Escala máxima de resolución interna (> 1 = supersampling si los FPS lo permiten). */
+  readonly maxResolutionScale: number;
+  /** Factor de resolución de las texturas dibujadas en canvas. */
+  readonly textureScale: number;
 }

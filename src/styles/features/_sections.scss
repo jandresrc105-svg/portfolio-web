@@ -29,7 +29,7 @@
     border-radius: $radius-md;
     background: $glass-background;
     box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur($glass-blur) saturate(140%);
+    backdrop-filter: blur(8px);
     pointer-events: auto;
     opacity: 0;
     transform: translateY(40px) scale(0.98);

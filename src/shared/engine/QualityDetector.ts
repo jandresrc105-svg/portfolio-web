@@ -10,17 +10,25 @@ export class QualityDetector {
   private static readonly HIGH: QualityProfile = {
     tier: 'high',
     pixelRatio: 2,
-    multisampling: 2,
+    multisampling: 0,
+    smaa: true,
     reflections: true,
     rainDrops: 6000,
+    buildings: 260,
+    maxResolutionScale: 1.5,
+    textureScale: 2,
   };
 
   private static readonly LOW: QualityProfile = {
     tier: 'low',
     pixelRatio: 1.5,
     multisampling: 0,
+    smaa: true,
     reflections: false,
     rainDrops: 2200,
+    buildings: 140,
+    maxResolutionScale: 1,
+    textureScale: 1.5,
   };
 
   /**

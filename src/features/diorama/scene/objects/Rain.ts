@@ -20,7 +20,7 @@ export class Rain extends SceneObject implements Updatable {
   private static readonly AREA = { radius: 8.5, height: 14, bottom: -3 };
   private static readonly DROP = { length: 0.3, speed: 11, slant: 0.05 };
   private static readonly COLOR = 0x9fb3ff;
-  private static readonly OPACITY = 0.11;
+  private static readonly OPACITY = 0.085;
   private static readonly VERTICES_PER_DROP = 2;
 
   private readonly time = { value: 0 };

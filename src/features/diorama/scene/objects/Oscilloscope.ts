@@ -1,4 +1,4 @@
-import { BoxGeometry, CylinderGeometry, Mesh, MeshBasicMaterial, PlaneGeometry, PointLight } from 'three';
+import { BoxGeometry, CylinderGeometry, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
 import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import type { Updatable } from '@shared/engine/Updatable';
@@ -17,20 +17,19 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
   private static readonly SCREEN = { width: 0.3, height: 0.21, x: -0.08, offset: 0.001 };
   private static readonly KNOB = { radius: 0.025, depth: 0.03, x: 0.17, spacing: 0.08 };
   private static readonly CANVAS = { width: 256, height: 180, grid: 8, samples: 96 };
-  private static readonly REFRESH_RATE = 30;
+  private static readonly REFRESH_RATE = 15;
   private static readonly TRACE_HEIGHT = 0.8;
   private static readonly GLOW = 2.6;
   private static readonly OFF_GLOW = 0.02;
-  private static readonly LIGHT = { color: 0x39ff9c, intensity: 1.4, distance: 1.6 };
   private static readonly TRACE = {
-    color: '#6dffb3',
+    color: '#b6ffd8',
+    halo: 'rgba(80, 255, 170, 0.28)',
     setpoint: 'rgba(255, 214, 102, 0.55)',
-    width: 3,
-    blur: 10,
+    width: 2.5,
+    glow: 3.2,
   };
 
   private readonly screen = new MeshBasicMaterial();
-  private readonly light = new PointLight(Oscilloscope.LIGHT.color, 0, Oscilloscope.LIGHT.distance, 2);
   private context: CanvasRenderingContext2D | null = null;
   private sinceRefresh = 0;
 
@@ -54,7 +53,6 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
    */
   public setPower(level: number): void {
     this.screen.color.setScalar(Math.max(level * Oscilloscope.GLOW, Oscilloscope.OFF_GLOW));
-    this.light.intensity = level * Oscilloscope.LIGHT.intensity;
   }
 
   /**
@@ -82,7 +80,6 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
     });
     this.buildScreen(height, depth);
     this.buildKnobs(height, depth);
-    this.add(this.light, { x: Oscilloscope.SCREEN.x, y: height / 2, z: depth });
     this.root.position.copy(Oscilloscope.POSITION);
     this.root.rotation.y = Oscilloscope.ROTATION_Y;
     this.setPower(0);
@@ -97,9 +94,14 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
   private buildScreen(height: number, depth: number): void {
     const { width, height: screenHeight, x, offset } = Oscilloscope.SCREEN;
     this.screen.map = this.own(
-      this.textures.paint(Oscilloscope.CANVAS.width, Oscilloscope.CANVAS.height, (context) => {
-        this.context = context;
-      }),
+      this.textures.paint(
+        Oscilloscope.CANVAS.width,
+        Oscilloscope.CANVAS.height,
+        (context) => {
+          this.context = context;
+        },
+        1,
+      ),
     );
     const plane = new Mesh(new PlaneGeometry(width, screenHeight), this.screen);
     this.add(plane, { x, y: height / 2, z: depth / 2 + offset });
@@ -130,23 +132,17 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
    * @param time Tiempo actual.
    */
   private draw(context: CanvasRenderingContext2D, time: number): void {
-    const { width, height, samples } = Oscilloscope.CANVAS;
+    const { width, height } = Oscilloscope.CANVAS;
+    const { setpoint, color, halo, width: lineWidth, glow } = Oscilloscope.TRACE;
     context.fillStyle = '#021a0e';
     context.fillRect(0, 0, width, height);
     this.drawGrid(context);
-    const trace = this.signal.trace(time, samples);
-    this.drawLine(
-      context,
-      trace.map((sample) => sample.setpoint),
-      Oscilloscope.TRACE.setpoint,
-      0,
-    );
-    this.drawLine(
-      context,
-      trace.map((sample) => sample.output),
-      Oscilloscope.TRACE.color,
-      Oscilloscope.TRACE.blur,
-    );
+    const start = time - this.signal.windowSeconds;
+    const setpointAt = (instant: number): number => this.signal.setpoint(instant);
+    const outputAt = (instant: number): number => this.signal.output(instant);
+    this.drawLine(context, { at: setpointAt, start, color: setpoint, width: lineWidth });
+    this.drawLine(context, { at: outputAt, start, color: halo, width: lineWidth * glow });
+    this.drawLine(context, { at: outputAt, start, color, width: lineWidth });
   }
 
   /**
@@ -169,27 +165,32 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
   }
 
   /**
-   * Dibuja una señal normalizada [-1, 1] ocupando todo el ancho.
+   * Dibuja una señal normalizada [-1, 1] a lo ancho de la pantalla, muestreándola punto a punto
+   * (sin crear arreglos por frame, para no generar basura para el recolector de memoria).
    *
    * @param context Contexto 2D.
-   * @param values Valores de la señal.
-   * @param color Color del trazo.
-   * @param blur Halo del trazo.
+   * @param line Trazo a dibujar.
+   * @param line.at Función que da el valor de la señal en un instante.
+   * @param line.start Instante del borde izquierdo de la pantalla.
+   * @param line.color Color del trazo.
+   * @param line.width Grosor del trazo.
    */
-  private drawLine(context: CanvasRenderingContext2D, values: number[], color: string, blur: number): void {
-    const { width, height } = Oscilloscope.CANVAS;
-    context.strokeStyle = color;
-    context.lineWidth = Oscilloscope.TRACE.width;
-    context.shadowColor = color;
-    context.shadowBlur = blur;
+  private drawLine(
+    context: CanvasRenderingContext2D,
+    line: { at: (instant: number) => number; start: number; color: string; width: number },
+  ): void {
+    const { width, height, samples } = Oscilloscope.CANVAS;
+    const step = this.signal.windowSeconds / (samples - 1);
+    context.strokeStyle = line.color;
+    context.lineWidth = line.width;
     context.beginPath();
-    values.forEach((value, index) => {
+    for (let index = 0; index < samples; index += 1) {
+      const value = line.at(line.start + index * step);
       context.lineTo(
-        (index / (values.length - 1)) * width,
+        (index / (samples - 1)) * width,
         height / 2 - value * (height / 2) * Oscilloscope.TRACE_HEIGHT,
       );
-    });
+    }
     context.stroke();
-    context.shadowBlur = 0;
   }
 }
