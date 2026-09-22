@@ -132,17 +132,34 @@ DioramaScene (Composite) ──► SceneObject[]  (Island, Stall, Lantern, NeonS
       └─ MaterialLibrary (Flyweight) · CanvasTextureFactory (Factory) · SeededRandom
 ```
 
-| Clase                     | Responsabilidad                                                                                                      |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `SceneObject`             | Base de cada pieza 3D: `build()` crea su geometría en `root`; `dispose()` libera GPU. Equivalente 3D de `Component`. |
-| `Updatable` / `Powerable` | Contratos para animarse por frame y para encenderse en la intro.                                                     |
-| `DioramaScene`            | Crea las piezas, decide qué se anima, el orden de encendido y los puntos interactivos.                               |
-| `CameraRig`               | Recorre una curva Catmull-Rom entre encuadres según el progreso del scroll, con amortiguación y paralaje.            |
-| `PowerOnSequence`         | Línea de tiempo de la intro: vuelo de cámara + encendidos (fade o arranque de neón).                                 |
-| `AdaptiveResolution`      | Mide FPS reales y baja la resolución interna si el equipo no llega a 50 FPS.                                         |
-| `QualityDetector`         | Perfil alto/bajo: reflejos, MSAA, gotas de lluvia y `pixelRatio`.                                                    |
+| Clase                     | Responsabilidad                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `SceneObject`             | Base de cada pieza 3D: `build()` crea su geometría en `root`; `dispose()` libera GPU. Equivalente 3D de `Component`.                  |
+| `Updatable` / `Powerable` | Contratos para animarse por frame y para encenderse en la intro.                                                                      |
+| `DioramaScene`            | Crea las piezas, decide qué se anima, el orden de encendido y los puntos interactivos.                                                |
+| `CameraRig`               | Recorre una curva Catmull-Rom entre encuadres según el progreso del scroll, con amortiguación y paralaje.                             |
+| `PowerOnSequence`         | Línea de tiempo de la intro: vuelo de cámara + encendidos (fade o arranque de neón).                                                  |
+| `AdaptiveResolution`      | Mide FPS reales: baja la resolución si cae de 48 FPS dos muestras seguidas y la sube (hasta supersampling ×1.5) si sobra rendimiento. |
+| `QualityDetector`         | Perfil alto/bajo: reflejos, SMAA, gotas de lluvia, edificios, resolución de texturas y `pixelRatio`.                                  |
+| `SkyDome` / `CitySkyline` | Cielo con nubes procedurales y ciudad instanciada con ventanas calculadas en el shader (capa `Background`).                           |
+| `Storm`                   | Relámpagos que iluminan cielo, ciudad y escena, y avisan para que suene el trueno con retraso.                                        |
 
 Todo es procedural (sin modelos descargados) y determinista (`SeededRandom`). Para reemplazar una pieza por un `.glb`, se crea otro `SceneObject` que lo cargue en `build()` y se cambia en `DioramaScene`.
+
+## Audio
+
+```
+AudioEngine (shared, singleton) ── contexto Web Audio · compresor · volumen maestro · silencio
+      ▲ onChange
+Soundscape (Facade, Updatable) ──► RainSound · NeonHum · SwitchSound · ThunderSound · InterfaceSound
+      ▲
+DioramaExperience ── NeonSign.mirror(neon) · Storm.onStrike(thunder) · AudibleSwitch (Decorator) en cada Strike
+```
+
+- Todo el sonido se sintetiza (ruido filtrado y osciladores): no hay archivos de audio.
+- El navegador exige un gesto del usuario para crear el contexto; la pantalla de arranque lo resuelve con "Entrar con sonido / en silencio" y `SoundToggleComponent` permite cambiarlo después.
+- El zumbido del neón sigue el brillo real del tubo (baja en cada parpadeo) y la distancia de la cámara al letrero.
+- Al ocultar la pestaña el audio se silencia solo.
 
 ## Pendiente de definir
 

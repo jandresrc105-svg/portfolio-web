@@ -21,6 +21,16 @@ Documentación completa en `docs/` ([arquitectura](docs/architecture.md), [conve
 - **Diorama** (`src/features/diorama/`): `scene/objects/` (una clase por pieza del puesto), `scene/DioramaScene` (compone, define orden de encendido y hotspots), `camera/CameraRig` (recorrido ligado al scroll), `intro/PowerOnSequence` (GSAP), `experience/DioramaExperience` (Facade que usa el componente).
 - Los encuadres de `CameraRig.SHOTS` siguen el **mismo orden** que las secciones de `public/data/sections.json` (con el hero primero), y los `sectionId` de `DioramaScene.HOTSPOTS` coinciden con sus `id`.
 - Comunicación entre features: `AppEventBus` (`shared/core/events`). Scroll: `SmoothScroll` (Lenis).
+- **Audio** (`shared/audio/AudioEngine` + `features/diorama/audio/`): lluvia (`AmbientLoop`, bucle sin cortes) y música lofi (`Soundtrack`, transmitida) desde `public/audio/` (todo CC0, ver `public/audio/CREDITS.md`); zumbido del neón, relés, truenos y sonidos de UI sintetizados con Web Audio. El sonido está activo por defecto: se intenta reproducir de inmediato y, si el navegador lo bloquea, arranca con el primer clic/toque/tecla. La preferencia de silencio se recuerda en `localStorage`.
+- **Capas de render** (`RenderLayer`): los charcos solo reflejan la capa `Reflected` (neones, faroles, máquina, farola, marcadores). Reflejar la escena completa costaba ~10 ms por frame en GPUs integradas.
+- **Rendimiento:** `AdaptiveResolution` decide por regularidad de frames (no por FPS promedio); durante la intro puede bajar y al terminar libera el techo. Evitar MSAA, `shadowBlur` de canvas y texturas de canvas grandes que se actualicen cada frame.
+
+### Shaders GLSL (obligatorio: evita pantallas negras en Windows/ANGLE)
+
+- Nunca `smoothstep(a, b, x)` con `a >= b`: usar `1.0 - smoothstep(b, a, x)`.
+- Nunca `pow(x, y)` con `x` posiblemente negativo: `pow(clamp(x, 0.0, 1.0), y)`.
+- Nunca dividir por algo que pueda ser 0: `max(valor, epsilon)`.
+- Un solo NaN en un buffer HDR se esparce por el bloom y deja **toda** la imagen negra.
 
 ## Reglas obligatorias
 
@@ -51,4 +61,4 @@ Las reglas 2–3 y 5–11 las hace cumplir ESLint (`eslint.config.js` + plugin l
 Ramas: `DESARROLLO_JARC` → `DESARROLLO` → `CALIDAD` → `PRODUCTIVO`. Nunca trabajar directo en `PRODUCTIVO`.
 Identidad local del repo: `jandresrc105@gmail.com` (la configuración global es la de la empresa; no modificarla).
 
-Mensajes de commit: `tipo: descripción en español en primera persona` (p. ej. `feat: agregué el diorama 3D`, `fix: corregí el encuadre de la cámara`). **Sin líneas `Co-Authored-By` ni ninguna atribución a Claude.**
+Mensajes de commit: `tipo: verbo en infinitivo + descripción en español` (p. ej. `feat: agregar el diorama 3D`, `fix: corregir el encuadre de la cámara`). **Sin líneas `Co-Authored-By` ni ninguna atribución a Claude.**
