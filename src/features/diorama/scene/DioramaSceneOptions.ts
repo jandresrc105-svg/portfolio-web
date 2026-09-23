@@ -1,3 +1,4 @@
+import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
 import type { Weather } from '../models/Weather';
@@ -21,4 +22,6 @@ export interface DioramaSceneOptions {
   readonly instrument: ScopeControlService;
   /** Clima de la escena. */
   readonly weather: Weather;
+  /** Motor de audio compartido (sonidos propios de los equipos del taller). */
+  readonly audio: AudioEngine;
 }

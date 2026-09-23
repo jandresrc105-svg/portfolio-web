@@ -4,7 +4,8 @@ import { SceneObject } from '@shared/engine/SceneObject';
 import type { MaterialLibrary } from '../MaterialLibrary';
 
 /**
- * Isla flotante: un trozo de calle arrancado del suelo, con la parte inferior rocosa y afilada.
+ * Isla flotante: un trozo de calle arrancado del suelo, con la parte inferior rocosa y afilada. Hacia la
+ * izquierda se ensancha para darle espacio al taller de electrónica.
  */
 export class Island extends SceneObject {
   private static readonly RADIUS = 6.2;
@@ -16,6 +17,7 @@ export class Island extends SceneObject {
   private static readonly ROCK_JITTER = 0.55;
   private static readonly WIDTH_JITTER = 0.3;
   private static readonly HASH = { x: 12.9898, y: 37.719, z: 78.233, scale: 43758.5453 };
+  private static readonly ANNEX = { angle: 2.8, amount: 0.62, width: 0.42 };
   private static readonly SIDEWALK = { width: 5.6, height: 0.1, depth: 4.4, x: 0, y: 0.05, z: -0.1 };
 
   /**
@@ -67,7 +69,8 @@ export class Island extends SceneObject {
     const points: Vector2[] = [];
     for (let index = 0; index < Island.EDGE_POINTS; index += 1) {
       const angle = (index / Island.EDGE_POINTS) * Math.PI * 2;
-      const radius = Island.RADIUS + this.random.range(-Island.EDGE_JITTER, Island.EDGE_JITTER * 0.5);
+      const jitter = this.random.range(-Island.EDGE_JITTER, Island.EDGE_JITTER * 0.5);
+      const radius = (Island.RADIUS + jitter) * Island.annex(angle);
       points.push(new Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius));
     }
     return new Shape(points);
@@ -104,5 +107,18 @@ export class Island extends SceneObject {
   private static hash(x: number, y: number, z: number): number {
     const value = Math.sin(x * Island.HASH.x + y * Island.HASH.y + z * Island.HASH.z) * Island.HASH.scale;
     return value - Math.floor(value);
+  }
+
+  /**
+   * Ensanche de la isla hacia la izquierda, donde está el taller de electrónica: un lóbulo suave que crece
+   * alrededor de un ángulo, así el resto del contorno queda igual.
+   *
+   * @param angle Ángulo del punto del contorno.
+   * @returns Factor que multiplica el radio (1 = sin cambio).
+   */
+  private static annex(angle: number): number {
+    const { angle: center, amount, width } = Island.ANNEX;
+    const offset = Math.atan2(Math.sin(angle - center), Math.cos(angle - center)) / width;
+    return 1 + amount * Math.exp(-(offset * offset));
   }
 }

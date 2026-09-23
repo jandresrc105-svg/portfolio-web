@@ -13,6 +13,7 @@ import type { PidLoopService } from '@shared/control/PidLoopService';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { Placement } from '../../models/Placement';
 import type { Powerable } from '../../models/Powerable';
 import type { CanvasTextureFactory } from '../CanvasTextureFactory';
 import { CircuitBoardArt } from './CircuitBoardArt';
@@ -22,13 +23,12 @@ import { ScopeProbe } from './ScopeProbe';
 import { ServoMotor } from './ServoMotor';
 
 /**
- * Placa del controlador PID sobre la barra, en separadores de latón, con el motor que controla (la planta)
+ * Placa del controlador PID sobre el banco del taller, en separadores de latón, con el motor que controla (la
+ * planta)
  * y la sonda del osciloscopio enganchada en la salida del lazo. La aguja del motor sigue la misma respuesta
  * que dibuja el osciloscopio; el LED RUN late y el LED ERR brilla según el error del lazo.
  */
 export class CircuitBoard extends SceneObject implements Updatable, Powerable {
-  private static readonly POSITION = { x: -1.0, y: 1.09, z: 0.99 };
-  private static readonly ROTATION_Y = 0.12;
   private static readonly FR4 = { color: 0xb9a56c, roughness: 0.75 };
   private static readonly STANDOFF = { radius: 0.0022, color: 0xc9a55a };
   private static readonly MOTOR = { x: 0.128, z: -0.004 };
@@ -57,11 +57,13 @@ export class CircuitBoard extends SceneObject implements Updatable, Powerable {
    * @param textures Fábrica de texturas.
    * @param loop Lazo PID que mueve el motor.
    * @param probeSource Devuelve, en el mundo, la punta del conector BNC donde nace la sonda.
+   * @param placement Dónde queda sobre el banco del taller.
    */
   public constructor(
     textures: CanvasTextureFactory,
     private readonly loop: PidLoopService,
     private readonly probeSource: (target: Vector3) => Vector3,
+    private readonly placement: Placement,
   ) {
     super();
     this.painter = new CircuitBoardArt(textures);
@@ -106,8 +108,8 @@ export class CircuitBoard extends SceneObject implements Updatable, Powerable {
    * @inheritdoc
    */
   protected override build(): void {
-    this.root.position.copy(CircuitBoard.POSITION);
-    this.root.rotation.y = CircuitBoard.ROTATION_Y;
+    this.root.position.copy(this.placement.position);
+    this.root.rotation.y = this.placement.rotationY;
     this.root.updateMatrixWorld(true);
     this.buildBoard();
     this.buildParts();

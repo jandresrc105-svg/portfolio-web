@@ -17,6 +17,8 @@ export interface SectionItem {
    * `CanFlavors` del diorama, p. ej. `web`, `typescript`, `react`, `unity`, `embedded`, `ai`).
    */
   readonly can?: string;
+  /** Nombre serigrafiado en su placa del banco del taller, si es un proyecto ("ESP32 FEEDER"). */
+  readonly board?: string;
   /** Etiqueta de su breaker en el tablero del poste, si es una etapa de la trayectoria ("ESP32"). */
   readonly breaker?: string;
   /** Enlace opcional (repositorio, demo). */

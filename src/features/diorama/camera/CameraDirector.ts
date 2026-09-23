@@ -16,11 +16,13 @@ export class CameraDirector implements Updatable {
     target: { x: 0, y: 0.6, z: 0 },
   };
   private static readonly SHOTS: CameraShot[] = [
-    { position: { x: 6.4, y: 3.4, z: 9.2 }, target: { x: -0.4, y: 1.35, z: 0.2 } },
+    { position: { x: 6.42, y: 3.65, z: 10.88 }, target: { x: -1.2, y: 1.35, z: 0.8 } },
     { position: { x: -1.5, y: 2.3, z: 4.5 }, target: { x: 0.4, y: 1.3, z: 1.1 } },
     { position: { x: 2.88, y: 1.35, z: 2.72 }, target: { x: 3.05, y: 1.08, z: 0.32 } },
-    { position: { x: -0.84, y: 1.44, z: 1.62 }, target: { x: -1.28, y: 1.14, z: 0.82 } },
     { position: { x: -3.55, y: 1.62, z: 1.3 }, target: { x: -3.28, y: 1.3, z: -0.78 } },
+    { position: { x: -4.8, y: 1.95, z: 2.7 }, target: { x: -7.03, y: 1.35, z: 1.56 } },
+    { position: { x: -6.34, y: 1.35, z: 2.6 }, target: { x: -7.48, y: 1.02, z: 2.22 } },
+    { position: { x: -3.91, y: 2, z: 4.46 }, target: { x: -7.3, y: 1.3, z: 2.52 } },
     { position: { x: -2.89, y: 1.45, z: 3.22 }, target: { x: -3.41, y: 1.3, z: 1.97 } },
   ];
   private static readonly CONTROLS = { damping: 0.06, rotateSpeed: 0.9, zoomSpeed: 0.8 };

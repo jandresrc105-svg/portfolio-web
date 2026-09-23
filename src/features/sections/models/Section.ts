@@ -24,6 +24,11 @@ export interface Section {
   readonly links?: readonly SectionLink[];
   /** Muestra los elementos de uno en uno como vitrina navegable (cada uno enlazado a un objeto 3D). */
   readonly showcase?: boolean;
+  /**
+   * Sus elementos son los proyectos: se recorren como vitrina y cada uno es una placa del banco del taller
+   * (su serigrafía sale de `board`).
+   */
+  readonly bench?: boolean;
   /** Muestra el panel para sintonizar en vivo el PID del osciloscopio. */
   readonly tuner?: boolean;
   /** Sus enlaces son el marcado rápido del teléfono de la escena (el primero es la tecla 1). */

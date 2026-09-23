@@ -23,12 +23,14 @@ import { DioramaScene } from '../scene/DioramaScene';
 import { MaterialLibrary } from '../scene/MaterialLibrary';
 import { NeonEnvironment } from '../scene/NeonEnvironment';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
+import { BenchInteraction } from './BenchInteraction';
+import { WorkshopInteraction } from './WorkshopInteraction';
 import { PanelInteraction } from './PanelInteraction';
 import { PhoneInteraction } from './PhoneInteraction';
 
 /**
  * Orquesta la experiencia 3D (patrón Facade): escenario, diorama, cámara, bucle, intro, sonido e interacción
- * (marcadores, latas, osciloscopio, teléfono y tablero del poste).
+ * (marcadores, latas, osciloscopio, teléfono, tablero del poste y banco del taller).
  * El componente DOM solo le pasa eventos, tamaños y a qué parada del recorrido ir; el arrastre, la rueda y
  * los gestos táctiles sobre el canvas los maneja directamente {@link CameraDirector}.
  */
@@ -44,13 +46,13 @@ export class DioramaExperience {
   private readonly controls = new PointerPicker<ScopeControlId>();
   private readonly resolution: AdaptiveResolution;
   private readonly focus = new Vector3();
-  private readonly stations: { stop: number; device: DeviceInteraction }[] = [];
+  private readonly stations: { stops: readonly number[]; device: DeviceInteraction }[] = [];
   private phone: PhoneInteraction | null = null;
   private call: ((channel: ContactChannel) => void) | null = null;
   private hovered: HotspotMarker | null = null;
   private hoveredItem: number | null = null;
   private hoveredControl: ScopeControlId | null = null;
-  private turning: { id: ScopeControlId; apply: (pixels: number) => void } | null = null;
+  private turning: { id: ScopeControlId | null; apply: (pixels: number) => void } | null = null;
   private holding = false;
   private interactive = false;
   private stop = 0;
@@ -76,7 +78,8 @@ export class DioramaExperience {
     this.stage = new Stage(canvas, quality);
     const textures = new CanvasTextureFactory(random, this.stage.maxAnisotropy, quality.textureScale);
     const materials = new MaterialLibrary(textures);
-    this.diorama = new DioramaScene({ materials, textures, random, quality, instrument, weather });
+    const audio = sound.audio;
+    this.diorama = new DioramaScene({ materials, textures, random, quality, instrument, weather, audio });
     this.director = new CameraDirector(this.stage.camera, canvas);
     this.resolution = new AdaptiveResolution(this.stage, quality);
     this.loop = new RenderLoop(this.stage.renderer, () => {
@@ -121,6 +124,7 @@ export class DioramaExperience {
     this.focusShowcase();
     this.connectPhone();
     this.connectPanel();
+    this.connectWorkshop();
     this.connectSound();
     this.diorama.puddles?.reflectOnly(this.stage.camera, RenderLayer.Reflected);
     this.loop.add(this.director, this.resolution, this.sound, this.devices.phone, ...this.diorama.updatables);
@@ -151,7 +155,7 @@ export class DioramaExperience {
     this.stop = stop;
     this.director.travelTo(stop);
     this.stations.forEach((station) => {
-      station.device.setActive(station.stop === stop);
+      station.device.setActive(station.stops.includes(stop));
     });
   }
 
@@ -176,7 +180,7 @@ export class DioramaExperience {
    * @returns Control señalado o `null`.
    */
   public hoverControl(): ScopeControlId | null {
-    const id = this.turning?.id ?? this.controlUnderPointer();
+    const id = this.turning ? this.turning.id : this.controlUnderPointer();
     if (id !== this.hoveredControl) {
       this.diorama.oscilloscope?.highlight(id);
       if (id !== null && this.turning === null) {
@@ -206,7 +210,7 @@ export class DioramaExperience {
   public grabControl(): boolean {
     const id = this.hoverControl();
     if (id === null) {
-      return false;
+      return this.grabDevice();
     }
     this.holding = true;
     this.director.lockRotation(true);
@@ -406,6 +410,23 @@ export class DioramaExperience {
   }
 
   /**
+   * Toma para arrastrar el control señalado del equipo de la sección abierta (una perilla del taller), si hay
+   * uno. La cámara no gira hasta soltar.
+   *
+   * @returns `true` si se tomó un control.
+   */
+  private grabDevice(): boolean {
+    const apply = this.hoverDevice() === null ? null : (this.station()?.grab?.() ?? null);
+    if (!apply) {
+      return false;
+    }
+    this.holding = true;
+    this.director.lockRotation(true);
+    this.turning = { id: null, apply };
+    return true;
+  }
+
+  /**
    * Conecta el teléfono de la cabina con el puntero, el sonido y la apertura de canales.
    */
   private connectPhone(): void {
@@ -417,7 +438,7 @@ export class DioramaExperience {
     this.phone.onCall((channel) => {
       this.call?.(channel);
     });
-    this.stations.push({ stop: this.diorama.contactStop, device: this.phone });
+    this.stations.push({ stops: [this.diorama.contactStop], device: this.phone });
   }
 
   /**
@@ -427,8 +448,19 @@ export class DioramaExperience {
     const { breakerPanel, streetLine } = this.diorama;
     if (breakerPanel && streetLine) {
       const panel = new PanelInteraction(this.devices.panel, breakerPanel, streetLine, this.sound);
-      this.stations.push({ stop: this.diorama.timelineStop, device: panel });
+      this.stations.push({ stops: [this.diorama.timelineStop], device: panel });
     }
+  }
+
+  /**
+   * Conecta el taller con el puntero y el sonido: los equipos del catálogo y el banco de los proyectos
+   * responden en todas las secciones que se ven desde el taller.
+   */
+  private connectWorkshop(): void {
+    const { workbench, workshopDevices, workshopStops } = this.diorama;
+    const others = workbench ? [new BenchInteraction(this.devices.bench, workbench, this.sound)] : [];
+    const workshop = new WorkshopInteraction(workshopDevices, others, this.sound);
+    this.stations.push({ stops: workshopStops, device: workshop });
   }
 
   /**
@@ -437,7 +469,7 @@ export class DioramaExperience {
    * @returns Equipo o `undefined`.
    */
   private station(): DeviceInteraction | undefined {
-    return this.stations.find((entry) => entry.stop === this.stop)?.device;
+    return this.stations.find((entry) => entry.stops.includes(this.stop))?.device;
   }
 
   /**

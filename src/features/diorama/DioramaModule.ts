@@ -14,6 +14,8 @@ import { BreakerPanelService } from './services/BreakerPanelService';
 import { PayPhoneService } from './services/PayPhoneService';
 import { ScopeControlService } from './services/ScopeControlService';
 import { ScopeService } from './services/ScopeService';
+import { WorkbenchService } from './services/WorkbenchService';
+import type { DioramaDevices } from './models/DioramaDevices';
 
 /**
  * Registra las dependencias del diorama 3D.
@@ -37,6 +39,7 @@ export class DioramaModule implements FeatureModule {
       .singleton(ScopeService, () => new ScopeService())
       .singleton(PayPhoneService, () => new PayPhoneService())
       .singleton(BreakerPanelService, () => new BreakerPanelService())
+      .singleton(WorkbenchService, () => new WorkbenchService())
       .singleton(
         ScopeControlService,
         (c) => new ScopeControlService(c.resolve(PidLoopService), c.resolve(ScopeService)),
@@ -51,16 +54,26 @@ export class DioramaModule implements FeatureModule {
    * @returns Fábrica.
    */
   private static experienceFactory(container: Container): DioramaExperienceFactory {
-    const devices = {
+    return new DioramaExperienceFactory(
+      container.resolve(QualityDetector),
+      DioramaModule.devices(container),
+      container.resolve(AudioEngine),
+    );
+  }
+
+  /**
+   * Equipos de la escena que el visitante usa (todos singleton: la escena y el componente comparten estado).
+   *
+   * @param container Contenedor de dependencias.
+   * @returns Equipos.
+   */
+  private static devices(container: Container): DioramaDevices {
+    return {
       instrument: container.resolve(ScopeControlService),
       phone: container.resolve(PayPhoneService),
       panel: container.resolve(BreakerPanelService),
+      bench: container.resolve(WorkbenchService),
     };
-    return new DioramaExperienceFactory(
-      container.resolve(QualityDetector),
-      devices,
-      container.resolve(AudioEngine),
-    );
   }
 
   /**
@@ -87,7 +100,7 @@ export class DioramaModule implements FeatureModule {
       container.resolve(DioramaExperienceFactory),
       container.resolve(SectionNavigator),
       container.resolve(AppEventBus),
-      container.resolve(BreakerPanelService),
+      DioramaModule.devices(container),
       {
         boot: container.resolve(BootScreenComponent),
         soundToggle: container.resolve(SoundToggleComponent),

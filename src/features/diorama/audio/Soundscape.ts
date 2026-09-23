@@ -58,6 +58,14 @@ export class Soundscape implements Updatable {
   }
 
   /**
+   * Motor de audio compartido, para los equipos que sintetizan sus propios sonidos (el taller).
+   *
+   * @returns Motor de audio.
+   */
+  public get audio(): AudioEngine {
+    return this.engine;
+  }
+  /**
    * Define el oyente (la cámara) y la fuente del zumbido (el letrero).
    *
    * @param camera Cámara que hace de oyente.

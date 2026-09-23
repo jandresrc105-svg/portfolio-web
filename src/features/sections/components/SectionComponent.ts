@@ -14,7 +14,8 @@ import { ShowcaseComponent } from './ShowcaseComponent';
 /**
  * Una sección de contenido: tarjeta de vidrio con botón para volver a la vista general, texto, etiquetas,
  * elementos y enlaces.
- * Si la sección es una vitrina (latas) o la trayectoria (breakers), sus elementos se recorren de uno en uno
+ * Si la sección es una vitrina (latas), los proyectos (placas) o la trayectoria (breakers), sus elementos se
+ * recorren de uno en uno
  * con {@link ShowcaseComponent} y se publica a la escena qué objeto corresponde a cada uno; si tiene
  * sintonizador, muestra {@link PidTunerComponent} antes de sus elementos. Si es la del teléfono, sus
  * enlaces son el marcado rápido: se numeran y se publican en `contactChannels` para la escena.
@@ -24,6 +25,11 @@ export class SectionComponent extends Component {
     selected: 'showcaseSelected',
     picked: 'showcasePicked',
     label: 'Vitrina de la máquina expendedora',
+  };
+  private static readonly BENCH: ShowcaseChannel = {
+    selected: 'benchSelected',
+    picked: 'benchPicked',
+    label: 'Placas del banco del taller',
   };
   private static readonly TIMELINE: ShowcaseChannel = {
     selected: 'timelineSelected',
@@ -121,29 +127,61 @@ export class SectionComponent extends Component {
    * @returns Elementos del cuerpo.
    */
   private body(): HTMLElement[] {
-    const { items = [], showcase, timeline } = this.section;
-    return showcase || timeline ? [this.showcase] : SectionComponent.itemList(items);
+    const { items = [] } = this.section;
+    return this.channel() === null ? SectionComponent.itemList(items) : [this.showcase];
   }
 
   /**
-   * Si la sección es la vitrina o la trayectoria, publica a la escena el objeto de cada elemento (sabor de
-   * lata o etiqueta de breaker) y monta la vitrina con sus eventos.
+   * Eventos de la vitrina de la sección, si recorre sus elementos de a uno: la trayectoria (breakers), los
+   * proyectos (placas) o las tecnologías (latas).
+   *
+   * @returns Canal de la vitrina o `null` si la sección no tiene vitrina.
+   */
+  private channel(): ShowcaseChannel | null {
+    const { showcase, timeline, bench } = this.section;
+    if (timeline) {
+      return SectionComponent.TIMELINE;
+    }
+    if (bench) {
+      return SectionComponent.BENCH;
+    }
+    return showcase ? SectionComponent.SHOWCASE : null;
+  }
+
+  /**
+   * Si la sección tiene vitrina, publica a la escena el objeto de cada elemento (etiqueta de breaker, de
+   * placa o sabor de lata) y monta la vitrina con sus eventos.
    */
   private mountShowcase(): void {
-    const { showcase, timeline, items = [] } = this.section;
-    if (items.length === 0 || !(showcase || timeline)) {
+    const { items = [] } = this.section;
+    const channel = this.channel();
+    if (items.length === 0 || channel === null) {
       return;
     }
+    this.announce(items);
+    this.mountChild(new ShowcaseComponent(items, this.events, channel), this.showcase);
+  }
+
+  /**
+   * Publica a la escena qué objeto corresponde a cada elemento de la vitrina.
+   *
+   * @param items Elementos de la sección.
+   */
+  private announce(items: readonly SectionItem[]): void {
+    const { timeline, bench } = this.section;
     if (timeline) {
       this.announceTimeline(items);
+    } else if (bench) {
+      this.events.emit(
+        'benchBoards',
+        items.map((item) => item.board ?? item.title),
+      );
     } else {
       this.events.emit(
         'showcaseCans',
         items.map((item) => item.can ?? ''),
       );
     }
-    const channel = timeline ? SectionComponent.TIMELINE : SectionComponent.SHOWCASE;
-    this.mountChild(new ShowcaseComponent(items, this.events, channel), this.showcase);
   }
 
   /**

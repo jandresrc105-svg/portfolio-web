@@ -1,4 +1,5 @@
 import type { Scene, Vector3Like } from 'three';
+import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
 import { RenderLayer } from '@shared/engine/RenderLayer';
@@ -6,10 +7,13 @@ import type { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { Hotspot } from '../models/Hotspot';
 import { PowerMode } from '../models/PowerMode';
+import type { Placement } from '../models/Placement';
+import type { WorkshopDevice } from '../models/WorkshopDevice';
 import type { PowerStep } from '../models/PowerStep';
 import type { Weather } from '../models/Weather';
 import { BreakerPanelService } from '../services/BreakerPanelService';
 import { PayPhoneService } from '../services/PayPhoneService';
+import { WorkbenchService } from '../services/WorkbenchService';
 import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from './CanvasTextureFactory';
 import { PowerGroup } from './PowerGroup';
@@ -49,6 +53,10 @@ import { StringLights } from './objects/StringLights';
 import { UtilityPole } from './objects/UtilityPole';
 import { VendingMachine } from './objects/VendingMachine';
 import { BreakerPanel } from './panel/BreakerPanel';
+import { RepairShop } from './workshop/RepairShop';
+import { Workbench } from './workshop/Workbench';
+import { WorkshopCatalog } from './workshop/WorkshopCatalog';
+import { WorkshopLayout } from './workshop/WorkshopLayout';
 
 /**
  * Diorama completo (patrón Composite): crea cada pieza, la agrega a la escena y expone
@@ -58,13 +66,18 @@ export class DioramaScene {
   private static readonly HOTSPOTS: Hotspot[] = [
     { sectionId: 'sobre-mi', label: 'Sobre mí', anchor: { x: 0.5, y: 2.08, z: 1.9 } },
     { sectionId: 'tecnologias', label: 'Tecnologías', anchor: { x: 3.55, y: 2.25, z: 0.35 } },
-    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: -1.2, y: 1.6, z: 0.8 } },
     { sectionId: 'experiencia', label: 'Experiencia', anchor: { x: -3.75, y: 2.1, z: -0.6 } },
+    { sectionId: 'proyectos', label: 'Proyectos', anchor: { x: -5.11, y: 3.05, z: 2.44 } },
+    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: -5.54, y: 3.05, z: 3.11 } },
+    { sectionId: 'laboratorio', label: 'Laboratorio', anchor: { x: -5.97, y: 3.05, z: 3.78 } },
     { sectionId: 'contacto', label: 'Contacto', anchor: { x: -3.1, y: 2.55, z: 2.2 } },
   ];
+  private static readonly VENDING: Placement = { position: { x: 3.55, y: 0, z: 0.05 }, rotationY: -0.42 };
   private static readonly SHOWCASE_SECTION = 'tecnologias';
   private static readonly CONTACT_SECTION = 'contacto';
   private static readonly TIMELINE_SECTION = 'experiencia';
+  private static readonly BENCH_SECTION = 'proyectos';
+  private static readonly WORKSHOP_SECTIONS = ['proyectos', 'habilidades', 'laboratorio'];
   private static readonly LANTERNS = [
     { anchor: { x: -2.35, y: 2.55, z: 1.62 }, glyph: '麺', phase: 0, at: 1.6 },
     { anchor: { x: 2.35, y: 2.55, z: 1.62 }, glyph: '灯', phase: 1.7, at: 1.95 },
@@ -87,6 +100,7 @@ export class DioramaScene {
     rotation: -0.55,
     light: 0,
   };
+  private static readonly WORKSHOP_SIGN = { width: 2.4, height: 0.46, x: 0, y: 2.74, z: 1.485 };
   private static readonly TIMELINE = {
     street: 0.9,
     interior: 2.35,
@@ -95,6 +109,8 @@ export class DioramaScene {
     vending: 3.75,
     phone: 3.6,
     electronics: 4.1,
+    workshop: 4.25,
+    workshopSign: 4.45,
     markers: 5.3,
     markerStagger: 0.12,
   };
@@ -110,8 +126,11 @@ export class DioramaScene {
   public phoneBooth: PhoneBooth | null = null;
   public breakerPanel: BreakerPanel | null = null;
   public streetLine: SwitchedLine | null = null;
+  public workbench: Workbench | null = null;
+  public workshopDevices: WorkshopDevice[] = [];
 
   private readonly objects: SceneObject[] = [];
+  private readonly workshop = new WorkshopLayout();
   private readonly luminous: SceneObject[] = [];
   private readonly materials: MaterialLibrary;
   private readonly textures: CanvasTextureFactory;
@@ -119,6 +138,7 @@ export class DioramaScene {
   private readonly quality: QualityProfile;
   private readonly instrument: ScopeControlService;
   private readonly weather: Weather;
+  private readonly audio: AudioEngine;
 
   /**
    * Prepara el diorama.
@@ -132,6 +152,7 @@ export class DioramaScene {
     this.quality = options.quality;
     this.instrument = options.instrument;
     this.weather = options.weather;
+    this.audio = options.audio;
   }
 
   /**
@@ -168,9 +189,26 @@ export class DioramaScene {
    * @returns Índice del encuadre.
    */
   public get showcaseStop(): number {
-    return (
-      DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.SHOWCASE_SECTION) + 1
-    );
+    return DioramaScene.stopOf(DioramaScene.SHOWCASE_SECTION);
+  }
+
+  /**
+   * Parada del recorrido de la sección de proyectos (la del banco del taller).
+   *
+   * @returns Índice de la parada.
+   */
+  public get benchStop(): number {
+    return DioramaScene.stopOf(DioramaScene.BENCH_SECTION);
+  }
+
+  /**
+   * Paradas del recorrido que se ven desde el taller (proyectos, habilidades y laboratorio): en todas ellas
+   * responden sus equipos.
+   *
+   * @returns Índices de las paradas.
+   */
+  public get workshopStops(): number[] {
+    return DioramaScene.WORKSHOP_SECTIONS.map((section) => DioramaScene.stopOf(section));
   }
 
   /**
@@ -179,9 +217,7 @@ export class DioramaScene {
    * @returns Índice de la parada.
    */
   public get timelineStop(): number {
-    return (
-      DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.TIMELINE_SECTION) + 1
-    );
+    return DioramaScene.stopOf(DioramaScene.TIMELINE_SECTION);
   }
 
   /**
@@ -190,9 +226,7 @@ export class DioramaScene {
    * @returns Índice de la parada.
    */
   public get contactStop(): number {
-    return (
-      DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.CONTACT_SECTION) + 1
-    );
+    return DioramaScene.stopOf(DioramaScene.CONTACT_SECTION);
   }
 
   /**
@@ -206,6 +240,7 @@ export class DioramaScene {
     this.buildStall();
     this.buildCounter();
     this.buildStreet();
+    this.buildWorkshop();
     this.buildMarkers();
     this.objects.forEach((object) => scene.add(object.create()));
     this.luminous.forEach((object) => {
@@ -300,7 +335,7 @@ export class DioramaScene {
   }
 
   /**
-   * Letreros de neón y objetos sobre la barra: ramen, gato de la suerte, osciloscopio y placa.
+   * Letreros de neón y objetos sobre la barra: ramen y gato de la suerte.
    */
   private buildCounter(): void {
     this.mainSign = this.glow(this.animate(this.createMainSign()));
@@ -312,23 +347,25 @@ export class DioramaScene {
     );
     this.animate(new RamenBowl(this.textures, this.random));
     this.animate(new ManekiNeko(this.textures));
-    this.buildLab();
   }
 
   /**
-   * Banco de pruebas sobre la barra: osciloscopio y placa del controlador con su motor y la sonda.
+   * Osciloscopio y placa del controlador con su motor y la sonda, en el banco del taller bajo la fuente.
    */
   private buildLab(): void {
-    const oscilloscope = this.animate(new Oscilloscope(this.materials, this.textures, this.instrument));
+    const scope = this.workshop.placement(WorkshopLayout.SCOPE);
+    const oscilloscope = this.animate(
+      new Oscilloscope(this.materials, this.textures, this.instrument, scope),
+    );
     this.oscilloscope = oscilloscope;
     this.power(oscilloscope, DioramaScene.TIMELINE.electronics, PowerMode.Fade);
-    this.power(
-      this.animate(
-        new CircuitBoard(this.textures, this.instrument.loop, (target) => oscilloscope.probePort(target)),
-      ),
-      DioramaScene.TIMELINE.electronics,
-      PowerMode.Fade,
+    const plate = new CircuitBoard(
+      this.textures,
+      this.instrument.loop,
+      (target) => oscilloscope.probePort(target),
+      this.workshop.placement(WorkshopLayout.PLATE),
     );
+    this.power(this.animate(plate), DioramaScene.TIMELINE.electronics, PowerMode.Fade);
   }
 
   /**
@@ -346,7 +383,7 @@ export class DioramaScene {
       mode: PowerMode.Strike,
     });
     this.buildPanel();
-    this.vending = this.glow(this.animate(new VendingMachine(this.textures)));
+    this.vending = this.glow(this.animate(new VendingMachine(this.textures, DioramaScene.VENDING)));
     this.power(this.vending, DioramaScene.TIMELINE.vending, PowerMode.Strike);
     this.phoneBooth = this.glow(
       this.animate(new PhoneBooth(this.materials, this.textures, PayPhoneService.KEYS)),
@@ -365,6 +402,42 @@ export class DioramaScene {
     };
     this.breakerPanel = this.animate(new BreakerPanel(this.textures, ids));
     this.power(this.breakerPanel, DioramaScene.TIMELINE.street, PowerMode.Fade);
+  }
+
+  /**
+   * Taller de electrónica en la esquina derecha: el local, su letrero, el banco de pruebas de los proyectos y el
+   * osciloscopio con la placa del PID.
+   */
+  private buildWorkshop(): void {
+    const { workshop, workshopSign } = DioramaScene.TIMELINE;
+    this.power(new RepairShop(this.materials, this.textures), workshop, PowerMode.Fade);
+    this.power(this.glow(this.animate(this.createWorkshopSign())), workshopSign, PowerMode.Strike);
+    const ids = {
+      supply: WorkbenchService.SUPPLY,
+      lamp: WorkbenchService.LAMP,
+      board: (index: number): string => WorkbenchService.boardId(index),
+    };
+    this.workbench = this.animate(new Workbench(this.materials, this.textures, ids));
+    this.power(this.workbench, workshop, PowerMode.Fade);
+    this.buildLab();
+    this.buildDevices();
+  }
+
+  /**
+   * Equipos interactivos del catálogo del taller, que se encienden junto con el local.
+   */
+  private buildDevices(): void {
+    const context = {
+      materials: this.materials,
+      textures: this.textures,
+      layout: this.workshop,
+      audio: this.audio,
+      random: this.random,
+    };
+    this.workshopDevices = new WorkshopCatalog().create(context);
+    this.workshopDevices.forEach((device) => {
+      this.power(this.animate(device.piece), DioramaScene.TIMELINE.workshop, PowerMode.Fade);
+    });
   }
 
   /**
@@ -419,6 +492,27 @@ export class DioramaScene {
   }
 
   /**
+   * Letrero del taller sobre el alero: "電子部品" (componentes electrónicos) en verde de traza de osciloscopio.
+   *
+   * @returns Letrero.
+   */
+  private createWorkshopSign(): NeonSign {
+    const { width, height, ...local } = DioramaScene.WORKSHOP_SIGN;
+    return new NeonSign(this.textures, {
+      lines: [
+        { text: '電子部品', size: 58, font: CanvasTextureFactory.JAPANESE_FONT },
+        { text: 'REPAIR · LAB', size: 26, font: CanvasTextureFactory.MONO_FONT },
+      ],
+      color: '#4dffa0',
+      lightColor: 0x4dffa0,
+      size: { width, height },
+      position: this.workshop.world(local),
+      rotationY: WorkshopLayout.ROTATION_Y,
+      lightIntensity: 0,
+    });
+  }
+
+  /**
    * Registra una pieza estática.
    *
    * @param object Pieza.
@@ -467,5 +561,15 @@ export class DioramaScene {
       this.register(object);
     }
     this.powerSteps.push({ target: object, at, mode });
+  }
+
+  /**
+   * Parada del recorrido de una sección (el hero es la parada 0).
+   *
+   * @param sectionId Id de la sección.
+   * @returns Índice de la parada.
+   */
+  private static stopOf(sectionId: string): number {
+    return DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === sectionId) + 1;
   }
 }

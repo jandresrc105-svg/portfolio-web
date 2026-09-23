@@ -21,4 +21,10 @@ export interface AppEvents {
   readonly timelineDirectory: TimelineDirectory;
   /** El visitante subió un breaker del tablero en la escena 3D (índice de la etapa desde 0). */
   readonly timelinePicked: number;
+  /** Los proyectos se montaron: etiqueta serigrafiada de la placa de cada uno, en orden. */
+  readonly benchBoards: readonly string[];
+  /** El visitante eligió un proyecto en la vitrina (índice desde 0). */
+  readonly benchSelected: number;
+  /** El visitante llevó una placa al banco del taller en la escena 3D (índice del proyecto desde 0). */
+  readonly benchPicked: number;
 }

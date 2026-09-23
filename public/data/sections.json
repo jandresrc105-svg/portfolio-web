@@ -163,35 +163,8 @@
     ]
   },
   {
-    "id": "habilidades",
-    "eyebrow": "03 — Habilidades",
-    "title": "Señal estable, respuesta rápida",
-    "align": "left",
-    "paragraphs": [
-      "La traza del osciloscopio no es un video: es un lazo de control PID simulado en vivo sobre una planta de tercer orden, con saturación del actuador y anti-windup. El osciloscopio funciona de verdad: enciéndelo o apágalo, congela la traza con RUN/STOP, cambia las escalas y ajusta Kp, Ki, Kd y la amplitud y frecuencia de la onda cuadrada."
-    ],
-    "tuner": true,
-    "items": [
-      {
-        "title": "Frontend",
-        "description": "Interfaces mantenibles con tipado estricto y arquitectura por features.",
-        "tags": ["TypeScript", "JavaScript", "HTML", "Sass"]
-      },
-      {
-        "title": "Gráficos y animación",
-        "description": "Escenas 3D, shaders y animaciones ligadas al scroll.",
-        "tags": ["Three.js", "WebGL", "GLSL", "GSAP"]
-      },
-      {
-        "title": "Ingeniería",
-        "description": "Sistemas de control, automatización e instrumentación.",
-        "tags": ["Control", "PID", "Automatización", "Electrónica"]
-      }
-    ]
-  },
-  {
     "id": "experiencia",
-    "eyebrow": "04 — Experiencia",
+    "eyebrow": "03 — Experiencia",
     "title": "Trayectoria",
     "align": "right",
     "paragraphs": [
@@ -254,8 +227,115 @@
     ]
   },
   {
+    "id": "proyectos",
+    "eyebrow": "04 — Proyectos",
+    "title": "Del banco de pruebas al mundo real",
+    "align": "left",
+    "bench": true,
+    "paragraphs": [
+      "El taller de al lado es mi banco de pruebas. Cada placa colgada en el tablero es un proyecto: recórrelas con las flechas o haz clic en una placa para llevarla al banco.",
+      "La fuente y la lámpara de lupa funcionan: apágalas y préndelas con un clic."
+    ],
+    "items": [
+      {
+        "title": "Portafolio 3D",
+        "board": "PORTFOLIO-3D",
+        "meta": "2026 · Personal",
+        "description": "Este sitio: un diorama procedural en Three.js con equipos que funcionan de verdad (osciloscopio con un lazo PID simulado, tablero de breakers, teléfono y este banco), sobre una arquitectura POO con inyección de dependencias.",
+        "tags": ["TypeScript", "Three.js", "GLSL", "GSAP", "Sass"],
+        "link": {
+          "label": "Ver código",
+          "href": "https://github.com/jandresrc105-svg/portfolio-web"
+        }
+      },
+      {
+        "title": "Dosificador de comida para mascotas",
+        "board": "ESP32 FEEDER",
+        "meta": "Proyecto · [Año]",
+        "description": "Aplicación web para programar horarios y cantidades de comida, alojada en una ESP32 con DNS propio. La ESP32 era a la vez servidor, base de datos y el embebido que movía el dosificador. [Completa: detalles y resultados].",
+        "tags": ["ESP32", "IoT", "Embebidos", "Web"]
+      },
+      {
+        "title": "Proyecto de automatización",
+        "board": "PLC LAB",
+        "meta": "Año · Contexto",
+        "description": "[Completa: un proyecto donde se crucen la electrónica y el software: control, sensores, dashboards o IoT. El problema, cómo lo resolviste y el resultado medible].",
+        "tags": ["Control", "Hardware"]
+      }
+    ]
+  },
+  {
+    "id": "habilidades",
+    "eyebrow": "05 — Habilidades",
+    "title": "Señal estable, respuesta rápida",
+    "align": "left",
+    "paragraphs": [
+      "La traza del osciloscopio no es un video: es un lazo de control PID simulado en vivo sobre una planta de tercer orden, con saturación del actuador y anti-windup. El osciloscopio funciona de verdad: enciéndelo o apágalo, congela la traza con RUN/STOP, cambia las escalas y ajusta Kp, Ki, Kd y la amplitud y frecuencia de la onda cuadrada."
+    ],
+    "tuner": true,
+    "items": [
+      {
+        "title": "Frontend",
+        "description": "Interfaces mantenibles con tipado estricto y arquitectura por features.",
+        "tags": ["TypeScript", "JavaScript", "HTML", "Sass"]
+      },
+      {
+        "title": "Gráficos y animación",
+        "description": "Escenas 3D, shaders y animaciones ligadas al scroll.",
+        "tags": ["Three.js", "WebGL", "GLSL", "GSAP"]
+      },
+      {
+        "title": "Ingeniería",
+        "description": "Sistemas de control, automatización e instrumentación.",
+        "tags": ["Control", "PID", "Automatización", "Electrónica"]
+      }
+    ]
+  },
+  {
+    "id": "laboratorio",
+    "eyebrow": "06 — Laboratorio",
+    "title": "Taller abierto",
+    "align": "left",
+    "paragraphs": [
+      "Todo lo que ves en el taller funciona: toma las herramientas de la pared, gira las perillas, prende y apaga los equipos y las luces.",
+      "Cada estación es un experimento pequeño donde se cruzan la electrónica y el software."
+    ],
+    "items": [
+      {
+        "title": "Pared de herramientas",
+        "description": "Toma cualquier herramienta del tablero perforado: sale de su gancho y te cuenta para qué sirve.",
+        "tags": ["Herramientas", "Didáctico"]
+      },
+      {
+        "title": "Pelado y estañado de cable",
+        "description": "Pela el cable, tuerce los hilos y estáñalos con el cautín, paso a paso.",
+        "tags": ["Soldadura", "Montaje"]
+      },
+      {
+        "title": "Ley de Ohm en vivo",
+        "description": "Gira las décadas de resistencias y mira cómo cambia la corriente del LED. Si te pasas, se quema.",
+        "tags": ["Ohm", "Circuitos"]
+      },
+      {
+        "title": "Receptor de radio",
+        "description": "Sintoniza con el dial, extiende la antena y decodifica el mensaje en morse que aparece en el espectro.",
+        "tags": ["RF", "DSP", "Morse"]
+      },
+      {
+        "title": "Firmware en vivo",
+        "description": "Elige un programa en el portátil, súbelo al microcontrolador y mira cómo corre en su matriz de LEDs.",
+        "tags": ["C++", "MicroPython", "Embebidos"]
+      },
+      {
+        "title": "Luces del taller",
+        "description": "El tablero de interruptores controla cada luz del local, y la bola de plasma sigue tu puntero.",
+        "tags": ["Iluminación", "Alta tensión"]
+      }
+    ]
+  },
+  {
     "id": "contacto",
-    "eyebrow": "05 — Contacto",
+    "eyebrow": "07 — Contacto",
     "title": "¿Hablamos?",
     "align": "left",
     "paragraphs": [

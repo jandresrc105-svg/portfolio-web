@@ -15,6 +15,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { Placement } from '../../models/Placement';
 import type { Powerable } from '../../models/Powerable';
 import type { ScopeControlId } from '../../models/ScopeControlId';
 import type { ScopeControlService } from '../../services/ScopeControlService';
@@ -27,15 +28,13 @@ import { ScopeKey } from './ScopeKey';
 import { ScopeKnob } from './ScopeKnob';
 
 /**
- * Osciloscopio digital de banco sobre la barra: carcasa gris carbón con ventilación lateral, panel frontal
+ * Osciloscopio digital sobre el banco del taller: carcasa gris carbón con ventilación lateral, panel frontal
  * serigrafiado, pantalla LCD a color con la respuesta del lazo PID en vivo, teclas de goma retroiluminadas,
  * perillas y entradas BNC. Sus teclas y perillas funcionan (ver {@link Oscilloscope.controls}): encendido,
  * RUN/STOP, SINGLE, AUTO, MENU, canales, ganancias del PID, generador de la referencia y escalas. La
  * pantalla no lleva vidrio ni se ve afectada por el tone mapping, así se lee igual desde cualquier ángulo.
  */
 export class Oscilloscope extends SceneObject implements Updatable, Powerable {
-  private static readonly POSITION = { x: -1.2, y: 1.09, z: 0.72 };
-  private static readonly ROTATION_Y = 0.38;
   private static readonly BODY = { width: 0.41, height: 0.21, depth: 0.14, radius: 0.012, lift: 0.012 };
   private static readonly REAR = { width: 0.33, height: 0.16, depth: 0.1, radius: 0.02, overlap: 0.012 };
   private static readonly VENTS = {
@@ -93,11 +92,13 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
    * @param materials Materiales compartidos.
    * @param textures Fábrica de texturas.
    * @param instrument Tablero del equipo: lazo PID y estado del osciloscopio.
+   * @param placement Dónde queda sobre el banco del taller.
    */
   public constructor(
     private readonly materials: MaterialLibrary,
     textures: CanvasTextureFactory,
     private readonly instrument: ScopeControlService,
+    private readonly placement: Placement,
   ) {
     super();
     this.display = new OscilloscopeDisplay(textures, instrument.loop, instrument.settings);
@@ -187,8 +188,8 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
     this.buildKeys();
     this.buildKnobs();
     this.buildConnectors();
-    this.root.position.copy(Oscilloscope.POSITION);
-    this.root.rotation.y = Oscilloscope.ROTATION_Y;
+    this.root.position.copy(this.placement.position);
+    this.root.rotation.y = this.placement.rotationY;
     this.setPower(0);
     this.syncKnobs();
     this.subscribe();

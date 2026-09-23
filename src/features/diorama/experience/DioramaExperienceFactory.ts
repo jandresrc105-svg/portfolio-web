@@ -13,10 +13,13 @@ import { DioramaExperience } from './DioramaExperience';
 export class DioramaExperienceFactory {
   private static readonly WEATHER: Weather = { rain: false, storm: false, backdrop: false, fog: false };
   private static readonly FONT_SAMPLES = [
-    { font: `900 64px ${CanvasTextureFactory.JAPANESE_FONT}`, text: 'ラーメンらめん麺灯醤油味噌豚骨塩餃子' },
+    {
+      font: `900 64px ${CanvasTextureFactory.JAPANESE_FONT}`,
+      text: 'ラーメンらめん麺灯醤油味噌豚骨塩餃子電子部品',
+    },
     {
       font: `800 64px ${CanvasTextureFactory.MONO_FONT}`,
-      text: 'RAMEN & CIRCUITS TECNOLOGÍAS ¥0123456789 </> .NET C++ µPy aws JS TS A',
+      text: 'RAMEN & CIRCUITS REPAIR · LAB TECNOLOGÍAS ¥0123456789 </> .NET C++ µPy aws JS TS A Ω°',
     },
     { font: `800 64px ${CanvasTextureFactory.SANS_FONT}`, text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚ ·./+#' },
   ];

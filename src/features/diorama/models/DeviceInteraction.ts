@@ -37,6 +37,14 @@ export interface DeviceInteraction {
   press(): boolean;
 
   /**
+   * Toma el control señalado para arrastrarlo (perillas, deslizadores), si se puede.
+   *
+   * @returns Función que recibe el desplazamiento vertical en píxeles desde que se tomó (positivo = hacia
+   * arriba), o `null` si no hay un control arrastrable bajo el puntero.
+   */
+  grab?(): ((pixels: number) => void) | null;
+
+  /**
    * Deja de escuchar al equipo.
    */
   dispose(): void;

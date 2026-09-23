@@ -16,6 +16,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { Placement } from '../../models/Placement';
 import type { Powerable } from '../../models/Powerable';
 import type { CanvasTextureFactory } from '../CanvasTextureFactory';
 import { VendingMachineArt } from './VendingMachineArt';
@@ -32,8 +33,6 @@ import { VendingMachineFixtures } from './VendingMachineFixtures';
  * pintado (sin especular) para que la luz no deje destellos blancos sobre las latas.
  */
 export class VendingMachine extends SceneObject implements Updatable, Powerable {
-  private static readonly POSITION = { x: 3.55, y: 0, z: 0.05 };
-  private static readonly ROTATION_Y = -0.42;
   private static readonly BODY = { width: 1, height: 1.9, depth: 0.78, radius: 0.035 };
   private static readonly FINISH = {
     body: { color: 0x1c3f8f, roughness: 0.32, metalness: 0.55 },
@@ -95,8 +94,12 @@ export class VendingMachine extends SceneObject implements Updatable, Powerable 
    * Crea la máquina.
    *
    * @param textures Fábrica de texturas.
+   * @param placement Dónde queda, junto a la fachada del taller.
    */
-  public constructor(textures: CanvasTextureFactory) {
+  public constructor(
+    textures: CanvasTextureFactory,
+    private readonly placement: Placement,
+  ) {
     super();
     this.art = new VendingMachineArt(textures);
     this.cans = new VendingCans(
@@ -217,8 +220,8 @@ export class VendingMachine extends SceneObject implements Updatable, Powerable 
     this.buildTrims();
     this.buildSelector();
     this.add(this.light, { x: 0, y: VendingMachine.LIGHT.y, z: VendingMachine.LIGHT.z });
-    this.root.position.copy(VendingMachine.POSITION);
-    this.root.rotation.y = VendingMachine.ROTATION_Y;
+    this.root.position.copy(this.placement.position);
+    this.root.rotation.y = this.placement.rotationY;
     this.setPower(0);
   }
 

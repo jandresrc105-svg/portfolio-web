@@ -17,6 +17,7 @@ export class ContactShadows extends SceneObject {
     { x: 3.72, y: 0.006, z: 0.25, width: 1.9, depth: 1.3, turn: -0.42 },
     { x: -2.95, y: 0.006, z: 2.1, width: 0.85, depth: 0.85, turn: 0 },
     { x: -3.75, y: 0.006, z: -0.95, width: 0.8, depth: 0.8, turn: 0 },
+    { x: -6.8, y: 0.006, z: 2.3, width: 3.1, depth: 2.6, turn: 1 },
   ];
   private static readonly OPACITY = 0.62;
 

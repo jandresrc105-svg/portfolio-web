@@ -6,9 +6,9 @@ import type { ShowcaseChannel } from '../models/ShowcaseChannel';
 import { ItemCard } from './ItemCard';
 
 /**
- * Vitrina: muestra un elemento a la vez (las tecnologías o las etapas de la trayectoria), con flechas,
- * contador y puntos. Cada cambio publica el evento `selected` de su {@link ShowcaseChannel} para que la escena
- * 3D resalte su objeto (la lata o el breaker); al elegir un objeto en la escena llega `picked` y la vitrina
+ * Vitrina: muestra un elemento a la vez (las tecnologías, los proyectos o las etapas de la trayectoria), con
+ * flechas, contador y puntos. Cada cambio publica el evento `selected` de su {@link ShowcaseChannel} para que la
+ * escena 3D resalte su objeto (la lata, la placa o el breaker); al elegir un objeto en la escena llega `picked` y la vitrina
  * muestra ese elemento.
  * Mientras la vitrina está en pantalla, las flechas ← → del teclado solo cambian de elemento: en los
  * extremos no pasan a otra sección, la flecha correspondiente rebota para indicar el tope.

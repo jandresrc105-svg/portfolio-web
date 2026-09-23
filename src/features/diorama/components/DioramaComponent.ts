@@ -5,12 +5,12 @@ import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import type { SectionNavigator } from '@shared/core/navigation/SectionNavigator';
 import type { DioramaExperience } from '../experience/DioramaExperience';
 import type { DioramaExperienceFactory } from '../experience/DioramaExperienceFactory';
-import type { BreakerPanelService } from '../services/BreakerPanelService';
+import type { DioramaDevices } from '../models/DioramaDevices';
 import type { DioramaOverlays } from './DioramaOverlays';
 
 /**
  * Escena 3D a pantalla completa. Maneja el canvas, el tooltip, los clics sobre marcadores, latas, el
- * teléfono y el tablero del poste (y los números del teclado físico, que marcan en la sección de contacto); el
+ * teléfono, el tablero del poste y el banco del taller (y los números del teclado físico, que marcan en la sección de contacto); el
  * giro, la rueda y los gestos táctiles los atiende la cámara de {@link DioramaExperience}. Cada cambio de
  * sección del {@link SectionNavigator} lleva la cámara a su parada.
  */
@@ -50,14 +50,14 @@ export class DioramaComponent extends Component {
    * @param factory Fábrica de la experiencia 3D.
    * @param navigator Navegación entre secciones.
    * @param events Bus de eventos de la aplicación.
-   * @param panel Tablero del poste (etapas de la trayectoria).
+   * @param devices Equipos de la escena (el tablero del poste y el banco del taller hablan con las vitrinas).
    * @param overlays Consola de arranque, botón de sonido y riel de secciones.
    */
   public constructor(
     private readonly factory: DioramaExperienceFactory,
     private readonly navigator: SectionNavigator,
     private readonly events: AppEventBus,
-    private readonly panel: BreakerPanelService,
+    private readonly devices: DioramaDevices,
     private readonly overlays: DioramaOverlays,
   ) {
     super();
@@ -95,6 +95,7 @@ export class DioramaComponent extends Component {
     this.bindPointer();
     this.bindShowcase();
     this.bindTimeline();
+    this.bindBench();
     this.listenWindow('keydown', (event) => {
       this.dial(event);
     });
@@ -160,14 +161,35 @@ export class DioramaComponent extends Component {
   private bindTimeline(): void {
     this.subscriptions.push(
       this.events.on('timelineDirectory', (directory) => {
-        this.panel.setDirectory(directory);
+        this.devices.panel.setDirectory(directory);
       }),
       this.events.on('timelineSelected', (index) => {
-        this.panel.select(index);
+        this.devices.panel.select(index);
       }),
-      this.panel.on((event) => {
+      this.devices.panel.on((event) => {
         if (event.type === 'picked') {
           this.events.emit('timelinePicked', event.index);
+        }
+      }),
+    );
+  }
+
+  /**
+   * Sigue a los proyectos: cada uno es una placa del taller; elegir uno en la vitrina lo lleva al banco y
+   * tocar una placa en la escena lo muestra en la vitrina.
+   */
+  private bindBench(): void {
+    const { bench } = this.devices;
+    this.subscriptions.push(
+      this.events.on('benchBoards', (boards) => {
+        bench.setBoards(boards);
+      }),
+      this.events.on('benchSelected', (index) => {
+        bench.select(index);
+      }),
+      bench.on((event) => {
+        if (event.type === 'picked') {
+          this.events.emit('benchPicked', event.index);
         }
       }),
     );
