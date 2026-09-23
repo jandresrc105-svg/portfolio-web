@@ -8,11 +8,11 @@ import type { CanvasTextureFactory } from '../CanvasTextureFactory';
  * Luces de ciudad desenfocadas (bokeh) muy lejos del diorama: dan profundidad y ambiente nocturno.
  */
 export class CityBokeh extends SceneObject implements Updatable {
-  private static readonly COUNT = 220;
+  private static readonly COUNT = 140;
   private static readonly DISTANCE = { min: 38, max: 75 };
   private static readonly HEIGHT = { min: -18, max: 16 };
   private static readonly SIZE = 2.6;
-  private static readonly OPACITY = 0.3;
+  private static readonly OPACITY = 0.16;
   private static readonly ROTATION_SPEED = 0.004;
   private static readonly PALETTE = [
     { color: 0xff2d78 },

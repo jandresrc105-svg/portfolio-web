@@ -87,13 +87,15 @@ export abstract class Component<TElement extends HTMLElement = HTMLElement> {
    * @param target Elemento que emite el evento.
    * @param type Tipo de evento.
    * @param handler Manejador del evento.
+   * @param capture Escuchar en la fase de captura (antes que los listeners de los hijos).
    */
   protected listen<K extends keyof HTMLElementEventMap>(
     target: HTMLElement,
     type: K,
     handler: (event: HTMLElementEventMap[K]) => void,
+    capture = false,
   ): void {
-    target.addEventListener(type, handler, { signal: this.listeners.signal });
+    target.addEventListener(type, handler, { signal: this.listeners.signal, capture });
   }
 
   /**

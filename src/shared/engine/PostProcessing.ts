@@ -1,9 +1,7 @@
 import {
-  BlendFunction,
   BloomEffect,
   EffectComposer,
   EffectPass,
-  NoiseEffect,
   RenderPass,
   SMAAEffect,
   SMAAPreset,
@@ -15,14 +13,14 @@ import { HalfFloatType, type Camera, type Scene, type WebGLRenderer } from 'thre
 import type { QualityProfile } from './QualityProfile';
 
 /**
- * Cadena de post-procesado cinematográfico: bloom (neón), tone mapping, y en una sola pasada
- * antialiasing SMAA, viñeta y grano. Se usa SMAA en lugar de MSAA porque en GPUs integradas
- * el MSAA sobre buffers HDR puede costar la mitad del frame.
+ * Cadena de post-procesado: bloom (solo lo que de verdad emite luz, como el neón), tone mapping ACES para
+ * negros profundos y contraste limpio, y en una sola pasada antialiasing SMAA y una viñeta suave.
+ * Se usa SMAA en lugar de MSAA porque en GPUs integradas el MSAA sobre buffers HDR puede costar la mitad
+ * del frame. Un bloom con umbral bajo o un tone mapping plano (AgX) dejan la imagen empañada.
  */
 export class PostProcessing {
-  private static readonly BLOOM = { intensity: 2.1, threshold: 0.42, smoothing: 0.3, radius: 0.82 };
-  private static readonly VIGNETTE = { offset: 0.28, darkness: 0.78 };
-  private static readonly GRAIN_OPACITY = 0.045;
+  private static readonly BLOOM = { intensity: 1.3, threshold: 0.9, smoothing: 0.15, radius: 0.6 };
+  private static readonly VIGNETTE = { offset: 0.3, darkness: 0.62 };
 
   private readonly composer: EffectComposer;
 
@@ -41,7 +39,11 @@ export class PostProcessing {
     });
     this.composer.addPass(new RenderPass(scene, camera));
     this.composer.addPass(
-      new EffectPass(camera, PostProcessing.bloom(), new ToneMappingEffect({ mode: ToneMappingMode.AGX })),
+      new EffectPass(
+        camera,
+        PostProcessing.bloom(),
+        new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
+      ),
     );
     const antialias = quality.smaa ? [new SMAAEffect({ preset: SMAAPreset.MEDIUM })] : [];
     this.composer.addPass(new EffectPass(camera, ...antialias, ...PostProcessing.lens()));
@@ -88,14 +90,12 @@ export class PostProcessing {
   }
 
   /**
-   * Efectos de lente aplicados después del tone mapping, en la misma pasada que el antialiasing.
+   * Efecto de lente aplicado después del tone mapping, en la misma pasada que el antialiasing. Sin grano:
+   * la imagen queda limpia.
    *
-   * @returns Viñeta y grano.
+   * @returns Viñeta.
    */
-  private static lens(): [VignetteEffect, NoiseEffect] {
-    const vignette = new VignetteEffect(PostProcessing.VIGNETTE);
-    const grain = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY, premultiply: true });
-    grain.blendMode.opacity.value = PostProcessing.GRAIN_OPACITY;
-    return [vignette, grain];
+  private static lens(): [VignetteEffect] {
+    return [new VignetteEffect(PostProcessing.VIGNETTE)];
   }
 }

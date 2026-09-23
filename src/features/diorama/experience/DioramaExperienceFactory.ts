@@ -1,7 +1,8 @@
 import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { QualityDetector } from '@shared/engine/QualityDetector';
 import { Soundscape } from '../audio/Soundscape';
-import type { SignalService } from '../services/SignalService';
+import type { Weather } from '../models/Weather';
+import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from '../scene/CanvasTextureFactory';
 import { DioramaExperience } from './DioramaExperience';
 
@@ -10,21 +11,26 @@ import { DioramaExperience } from './DioramaExperience';
  * que se dibujan en los letreros, para que el componente no conozca esos detalles.
  */
 export class DioramaExperienceFactory {
+  private static readonly WEATHER: Weather = { rain: false, storm: false, backdrop: false, fog: false };
   private static readonly FONT_SAMPLES = [
     { font: `900 64px ${CanvasTextureFactory.JAPANESE_FONT}`, text: 'ラーメンらめん麺灯醤油味噌豚骨塩餃子' },
-    { font: `700 64px ${CanvasTextureFactory.MONO_FONT}`, text: 'RAMEN & CIRCUITS PROYECTOS ¥0123456789' },
+    {
+      font: `800 64px ${CanvasTextureFactory.MONO_FONT}`,
+      text: 'RAMEN & CIRCUITS TECNOLOGÍAS ¥0123456789 </> .NET C++ µPy aws JS TS A',
+    },
+    { font: `800 64px ${CanvasTextureFactory.SANS_FONT}`, text: 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚ ·./+#' },
   ];
 
   /**
    * Crea la fábrica.
    *
    * @param quality Detector de capacidad del dispositivo.
-   * @param signal Service del lazo de control.
+   * @param instrument Tablero del osciloscopio (lazo PID y estado del equipo).
    * @param audio Motor de audio compartido.
    */
   public constructor(
     private readonly quality: QualityDetector,
-    private readonly signal: SignalService,
+    private readonly instrument: ScopeControlService,
     private readonly audio: AudioEngine,
   ) {}
 
@@ -72,6 +78,8 @@ export class DioramaExperienceFactory {
    * @returns Experiencia lista para preparar.
    */
   public create(canvas: HTMLCanvasElement): DioramaExperience {
-    return new DioramaExperience(canvas, this.quality.detect(), this.signal, new Soundscape(this.audio));
+    const weather = DioramaExperienceFactory.WEATHER;
+    const sound = new Soundscape(this.audio, weather.rain);
+    return new DioramaExperience(canvas, this.quality.detect(), this.instrument, sound, weather);
   }
 }

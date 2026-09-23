@@ -1,0 +1,32 @@
+{
+  "id": "proyectos",
+  "eyebrow": "02 — Proyectos",
+  "title": "Lo que he construido",
+  "align": "left",
+  "showcase": true,
+  "paragraphs": ["Cada lata de la máquina es un proyecto: recorre la vitrina con las flechas."],
+  "items": [
+    {
+      "title": "Portafolio 3D",
+      "meta": "2026 · Personal",
+      "description": "Este sitio: diorama procedural en Three.js, lluvia calculada en GPU, reflejos planares y una arquitectura POO con inyección de dependencias.",
+      "tags": ["TypeScript", "Three.js", "GSAP", "Sass"],
+      "link": {
+        "label": "Ver código",
+        "href": "https://github.com/jandresrc105-svg/portfolio-web"
+      }
+    },
+    {
+      "title": "Proyecto destacado",
+      "meta": "Año · Contexto",
+      "description": "Reemplaza este texto con el problema que resolviste, cómo lo hiciste y el resultado medible.",
+      "tags": ["Tecnología", "Tecnología"]
+    },
+    {
+      "title": "Proyecto de automatización",
+      "meta": "Año · Contexto",
+      "description": "Un proyecto donde se cruzan la electrónica y el software: control, sensores, dashboards o IoT.",
+      "tags": ["Control", "Hardware"]
+    }
+  ]
+}

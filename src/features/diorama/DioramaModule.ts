@@ -1,14 +1,17 @@
 import { AudioEngine } from '@shared/audio/AudioEngine';
+import { PidLoopService } from '@shared/control/PidLoopService';
 import type { Container } from '@shared/core/di/Container';
 import type { FeatureModule } from '@shared/core/di/FeatureModule';
 import { AppEventBus } from '@shared/core/events/AppEventBus';
-import { SmoothScroll } from '@shared/core/scroll/SmoothScroll';
+import { SectionNavigator } from '@shared/core/navigation/SectionNavigator';
 import { QualityDetector } from '@shared/engine/QualityDetector';
 import { BootScreenComponent } from './components/BootScreenComponent';
 import { DioramaComponent } from './components/DioramaComponent';
+import { SectionNavComponent } from './components/SectionNavComponent';
 import { SoundToggleComponent } from './components/SoundToggleComponent';
 import { DioramaExperienceFactory } from './experience/DioramaExperienceFactory';
-import { SignalService } from './services/SignalService';
+import { ScopeControlService } from './services/ScopeControlService';
+import { ScopeService } from './services/ScopeService';
 
 /**
  * Registra las dependencias del diorama 3D.
@@ -29,13 +32,17 @@ export class DioramaModule implements FeatureModule {
    */
   private static registerServices(container: Container): void {
     container
-      .singleton(SignalService, () => new SignalService())
+      .singleton(ScopeService, () => new ScopeService())
+      .singleton(
+        ScopeControlService,
+        (c) => new ScopeControlService(c.resolve(PidLoopService), c.resolve(ScopeService)),
+      )
       .singleton(
         DioramaExperienceFactory,
         (c) =>
           new DioramaExperienceFactory(
             c.resolve(QualityDetector),
-            c.resolve(SignalService),
+            c.resolve(ScopeControlService),
             c.resolve(AudioEngine),
           ),
       );
@@ -50,16 +57,26 @@ export class DioramaModule implements FeatureModule {
     container
       .transient(BootScreenComponent, () => new BootScreenComponent())
       .transient(SoundToggleComponent, (c) => new SoundToggleComponent(c.resolve(AudioEngine)))
-      .transient(
-        DioramaComponent,
-        (c) =>
-          new DioramaComponent(
-            c.resolve(DioramaExperienceFactory),
-            c.resolve(SmoothScroll),
-            c.resolve(AppEventBus),
-            c.resolve(BootScreenComponent),
-            c.resolve(SoundToggleComponent),
-          ),
-      );
+      .transient(SectionNavComponent, (c) => new SectionNavComponent(c.resolve(SectionNavigator)))
+      .transient(DioramaComponent, (c) => DioramaModule.diorama(c));
+  }
+
+  /**
+   * Componente principal del diorama con sus dependencias y superposiciones.
+   *
+   * @param container Contenedor de dependencias.
+   * @returns Componente del diorama.
+   */
+  private static diorama(container: Container): DioramaComponent {
+    return new DioramaComponent(
+      container.resolve(DioramaExperienceFactory),
+      container.resolve(SectionNavigator),
+      container.resolve(AppEventBus),
+      {
+        boot: container.resolve(BootScreenComponent),
+        soundToggle: container.resolve(SoundToggleComponent),
+        nav: container.resolve(SectionNavComponent),
+      },
+    );
   }
 }

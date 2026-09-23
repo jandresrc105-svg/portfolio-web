@@ -1,3 +1,4 @@
+import type { QualityProfile } from './QualityProfile';
 import type { Stage } from './Stage';
 import type { Updatable } from './Updatable';
 
@@ -7,7 +8,9 @@ import type { Updatable } from './Updatable';
  * como tirones):
  * - baja un escalón si más del 15 % de los frames es lento en dos muestras seguidas;
  * - sube un escalón (hasta supersampling) solo si casi ningún frame es lento;
- * - la escala que falló queda como techo definitivo, para no alternar entre dos resoluciones.
+ * - la escala que falló queda como techo definitivo, para no alternar entre dos resoluciones;
+ * - nunca baja del mínimo del perfil: en equipos potentes es la resolución nativa, porque por debajo la
+ *   imagen se ve borrosa (bajar solo se permite en equipos débiles).
  */
 export class AdaptiveResolution implements Updatable {
   private static readonly SLOW_FRAME_SECONDS = 0.022;
@@ -16,12 +19,12 @@ export class AdaptiveResolution implements Updatable {
   private static readonly WARMUP_SECONDS = 4;
   private static readonly UPGRADE_COOLDOWN = 5;
   private static readonly STEP = 0.15;
-  private static readonly MIN_SCALE = 0.5;
   private static readonly BAD_SAMPLES = 2;
 
   private scale = 1;
   private ceiling: number;
   private readonly maxScale: number;
+  private readonly minScale: number;
   private frames = 0;
   private slowFrames = 0;
   private seconds = 0;
@@ -33,14 +36,15 @@ export class AdaptiveResolution implements Updatable {
    * Crea el regulador.
    *
    * @param stage Escenario cuya resolución se ajusta.
-   * @param maxScale Escala máxima permitida por el perfil de calidad.
+   * @param quality Perfil de calidad (escalas mínima y máxima permitidas).
    */
   public constructor(
     private readonly stage: Stage,
-    maxScale: number,
+    quality: Pick<QualityProfile, 'minResolutionScale' | 'maxResolutionScale'>,
   ) {
-    this.ceiling = maxScale;
-    this.maxScale = maxScale;
+    this.ceiling = quality.maxResolutionScale;
+    this.maxScale = quality.maxResolutionScale;
+    this.minScale = Math.min(quality.minResolutionScale, quality.maxResolutionScale);
   }
 
   /**
@@ -80,10 +84,10 @@ export class AdaptiveResolution implements Updatable {
    * @param slowRatio Fracción de frames lentos en la última muestra.
    */
   private evaluate(slowRatio: number): void {
-    const { RATIO, STEP, MIN_SCALE, UPGRADE_COOLDOWN, BAD_SAMPLES } = AdaptiveResolution;
+    const { RATIO, STEP, UPGRADE_COOLDOWN, BAD_SAMPLES } = AdaptiveResolution;
     this.badStreak = slowRatio > RATIO.downgrade ? this.badStreak + 1 : 0;
-    if (this.badStreak >= BAD_SAMPLES && this.scale > MIN_SCALE) {
-      this.ceiling = Math.max(this.scale - STEP, MIN_SCALE);
+    if (this.badStreak >= BAD_SAMPLES && this.scale > this.minScale) {
+      this.ceiling = Math.max(this.scale - STEP, this.minScale);
       this.apply(this.ceiling);
       return;
     }

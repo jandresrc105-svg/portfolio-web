@@ -14,8 +14,10 @@ export class QualityDetector {
     smaa: true,
     reflections: true,
     rainDrops: 6000,
+    splashes: 420,
     buildings: 260,
     maxResolutionScale: 1.5,
+    minResolutionScale: 1,
     textureScale: 2,
   };
 
@@ -26,8 +28,10 @@ export class QualityDetector {
     smaa: true,
     reflections: false,
     rainDrops: 2200,
+    splashes: 160,
     buildings: 140,
     maxResolutionScale: 1,
+    minResolutionScale: 0.7,
     textureScale: 1.5,
   };
 

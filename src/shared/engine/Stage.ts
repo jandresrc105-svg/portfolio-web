@@ -1,12 +1,14 @@
 import {
   Mesh,
   PerspectiveCamera,
+  PMREMGenerator,
   Points,
   Scene,
   SRGBColorSpace,
   Texture,
   WebGLRenderer,
   type Material,
+  type WebGLRenderTarget,
 } from 'three';
 import { PostProcessing } from './PostProcessing';
 import type { QualityProfile } from './QualityProfile';
@@ -20,6 +22,7 @@ export class Stage {
   private static readonly NEAR = 0.1;
   private static readonly FAR = 220;
   private static readonly MAX_PIXEL_RATIO = 2;
+  private static readonly ENVIRONMENT_BLUR = 0.04;
 
   public readonly scene = new Scene();
   public readonly camera = new PerspectiveCamera(Stage.FOV, 1, Stage.NEAR, Stage.FAR);
@@ -28,6 +31,7 @@ export class Stage {
   private readonly post: PostProcessing;
   private size = { width: 1, height: 1 };
   private resolutionScale = 1;
+  private environment: WebGLRenderTarget | null = null;
 
   /**
    * Crea el escenario sobre un canvas.
@@ -87,6 +91,22 @@ export class Stage {
   }
 
   /**
+   * Hornea una escena de referencia como mapa de entorno prefiltrado (PMREM). Una sola vez al inicio:
+   * da reflejos de color a metales, vidrio y asfalto mojado sin costo por frame.
+   *
+   * @param source Escena de referencia (normalmente fuentes de luz emisivas alrededor).
+   * @param intensity Intensidad del entorno sobre los materiales PBR.
+   */
+  public bakeEnvironment(source: Scene, intensity: number): void {
+    const generator = new PMREMGenerator(this.renderer);
+    this.environment?.dispose();
+    this.environment = generator.fromScene(source, Stage.ENVIRONMENT_BLUR);
+    generator.dispose();
+    this.scene.environment = this.environment.texture;
+    this.scene.environmentIntensity = intensity;
+  }
+
+  /**
    * Compila los shaders y sube las texturas a la GPU antes de mostrar la escena,
    * para que esos costos no aparezcan como tirones durante la intro.
    *
@@ -114,6 +134,7 @@ export class Stage {
    * Libera los recursos de GPU del escenario.
    */
   public dispose(): void {
+    this.environment?.dispose();
     this.post.dispose();
     this.renderer.dispose();
   }

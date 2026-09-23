@@ -1,19 +1,22 @@
 import { Component } from '@shared/core/component/Component';
 import { ElementBuilder } from '@shared/core/dom/ElementBuilder';
 import type { AppEventBus } from '@shared/core/events/AppEventBus';
-import type { SmoothScroll } from '@shared/core/scroll/SmoothScroll';
+import type { SectionNavigator } from '@shared/core/navigation/SectionNavigator';
 import type { DioramaExperience } from '../experience/DioramaExperience';
 import type { DioramaExperienceFactory } from '../experience/DioramaExperienceFactory';
-import type { BootScreenComponent } from './BootScreenComponent';
-import type { SoundToggleComponent } from './SoundToggleComponent';
+import type { DioramaOverlays } from './DioramaOverlays';
 
 /**
- * Fondo 3D del portafolio. Maneja el canvas, el tooltip de los marcadores y los eventos del usuario;
- * toda la lógica 3D vive en {@link DioramaExperience}.
+ * Escena 3D a pantalla completa. Maneja el canvas, el tooltip y los clics sobre marcadores y latas; el
+ * giro, la rueda y los gestos táctiles los atiende la cámara de {@link DioramaExperience}. Cada cambio de
+ * sección del {@link SectionNavigator} lleva la cámara a su parada.
  */
 export class DioramaComponent extends Component {
   private static readonly TOOLTIP_OFFSET = 18;
   private static readonly INTERACTIVE_SELECTOR = 'a, button, input, textarea, .section__card';
+  private static readonly DRAG_THRESHOLD = 6;
+  private static readonly DRAGGING_CLASS = 'is-dragging';
+  private static readonly TUNING_CLASS = 'is-tuning';
 
   private readonly canvas = ElementBuilder.create('canvas')
     .classes('diorama__canvas')
@@ -25,26 +28,29 @@ export class DioramaComponent extends Component {
     .build();
   private readonly hint = ElementBuilder.create('p')
     .classes('diorama__hint')
-    .text('Desliza para recorrer el puesto · toca los marcadores')
+    .text('Arrastra para girar · rueda para acercar · toca los marcadores y las latas')
     .build();
   private experience: DioramaExperience | null = null;
-  private unsubscribe: (() => void) | null = null;
+  private press: { x: number; y: number } | null = null;
+  private grabbedAt: number | null = null;
+  private suppressClick = false;
+  private item = 0;
+  private showcaseCans: readonly string[] = [];
+  private readonly subscriptions: (() => void)[] = [];
 
   /**
    * Crea el componente.
    *
    * @param factory Fábrica de la experiencia 3D.
-   * @param scroll Scroll suave compartido.
+   * @param navigator Navegación entre secciones.
    * @param events Bus de eventos de la aplicación.
-   * @param boot Pantalla de arranque.
-   * @param soundToggle Botón de sonido.
+   * @param overlays Consola de arranque, botón de sonido y riel de secciones.
    */
   public constructor(
     private readonly factory: DioramaExperienceFactory,
-    private readonly scroll: SmoothScroll,
+    private readonly navigator: SectionNavigator,
     private readonly events: AppEventBus,
-    private readonly boot: BootScreenComponent,
-    private readonly soundToggle: SoundToggleComponent,
+    private readonly overlays: DioramaOverlays,
   ) {
     super();
   }
@@ -53,7 +59,9 @@ export class DioramaComponent extends Component {
    * @inheritdoc
    */
   public override unmount(): void {
-    this.unsubscribe?.();
+    this.subscriptions.splice(0).forEach((unsubscribe) => {
+      unsubscribe();
+    });
     this.experience?.dispose();
     this.experience = null;
     super.unmount();
@@ -76,43 +84,93 @@ export class DioramaComponent extends Component {
     this.listenWindow('resize', () => {
       this.experience?.resize(window.innerWidth, window.innerHeight);
     });
-    this.listenWindow('pointermove', (event) => {
-      this.track(event);
-    });
-    this.listenWindow('click', (event) => {
-      this.select(event);
-    });
+    this.bindPointer();
+    this.bindShowcase();
   }
 
   /**
    * @inheritdoc
    */
   protected override onMount(): void {
-    this.mountChild(this.boot, document.body);
+    this.mountChild(this.overlays.boot, document.body);
     void this.start();
+  }
+
+  /**
+   * Puntero sobre la escena: seguimiento, clics, arrastre y perillas del osciloscopio. La perilla se toma en
+   * la fase de captura, antes de que la cámara empiece a girar.
+   */
+  private bindPointer(): void {
+    this.listenWindow('pointermove', (event) => {
+      this.moveDrag(event);
+      this.turnKnob(event);
+      this.track(event);
+    });
+    const grab = (event: PointerEvent): void => {
+      this.grabKnob(event);
+    };
+    this.listen(this.element, 'pointerdown', grab, true);
+    this.listenWindow('click', (event) => {
+      this.select(event);
+    });
+    this.listen(this.canvas, 'pointerdown', (event) => {
+      this.startPress(event);
+    });
+    this.listenWindow('pointerup', () => {
+      this.endDrag();
+    });
+  }
+
+  /**
+   * Sigue a la vitrina: el sabor de cada lata y cuál está elegida.
+   */
+  private bindShowcase(): void {
+    this.subscriptions.push(
+      this.events.on('showcaseSelected', (item) => {
+        this.item = item;
+        this.experience?.showItem(item);
+      }),
+      this.events.on('showcaseCans', (cans) => {
+        this.showcaseCans = cans;
+        this.experience?.setItems(cans);
+      }),
+    );
   }
 
   /**
    * Arranca la experiencia: sonido, consola de arranque mientras compila la escena, y la intro.
    */
   private async start(): Promise<void> {
-    this.scroll.start();
-    this.scroll.lock();
     this.factory.startSound();
     try {
       const experience = this.createExperience();
-      await this.boot.play(this.prepare(experience));
-      await this.boot.dismiss();
-      this.unsubscribe = this.scroll.onProgress((progress) => {
-        experience.setScroll(progress);
-      });
+      await this.overlays.boot.play(this.prepare(experience));
+      await this.overlays.boot.dismiss();
+      this.connect(experience);
       await experience.powerOn(this.factory.prefersReducedMotion());
     } catch (error: unknown) {
       console.error(error);
       this.element.classList.add('diorama--fallback');
-      await this.boot.dismiss();
+      await this.overlays.boot.dismiss();
     }
     this.finish();
+  }
+
+  /**
+   * Conecta la experiencia con la navegación y con la vitrina.
+   *
+   * @param experience Experiencia ya preparada.
+   */
+  private connect(experience: DioramaExperience): void {
+    this.navigator.setStops(experience.hotspots.map((hotspot) => hotspot.sectionId));
+    this.subscriptions.push(
+      this.navigator.onChange(() => {
+        experience.travelTo(this.navigator.position);
+      }),
+    );
+    experience.travelTo(this.navigator.position);
+    experience.setItems(this.showcaseCans);
+    experience.showItem(this.item);
   }
 
   /**
@@ -140,17 +198,88 @@ export class DioramaComponent extends Component {
   }
 
   /**
-   * Libera el scroll, muestra el botón de sonido y avisa al resto de la app que la intro terminó.
+   * Muestra el botón de sonido y el riel, y avisa al resto de la app que la intro terminó.
    */
   private finish(): void {
-    this.scroll.unlock();
     this.element.classList.add('diorama--ready');
-    this.mountChild(this.soundToggle, document.body);
+    this.mountChild(this.overlays.soundToggle, document.body);
+    if (this.experience) {
+      this.overlays.nav.setStops(this.experience.hotspots);
+      this.mountChild(this.overlays.nav, document.body);
+    }
     this.events.emit('introComplete', undefined);
   }
 
   /**
-   * Actualiza puntero, paralaje y tooltip.
+   * Recuerda dónde se presionó, para distinguir un clic de un arrastre.
+   *
+   * @param event Evento de puntero.
+   */
+  private startPress(event: PointerEvent): void {
+    this.press = { x: event.clientX, y: event.clientY };
+    this.suppressClick = false;
+  }
+
+  /**
+   * Marca el arrastre (para el cursor) cuando el puntero presionado se mueve lo suficiente.
+   *
+   * @param event Evento de puntero.
+   */
+  private moveDrag(event: PointerEvent): void {
+    if (!this.press) {
+      return;
+    }
+    const distance = Math.hypot(event.clientX - this.press.x, event.clientY - this.press.y);
+    if (distance > DioramaComponent.DRAG_THRESHOLD) {
+      this.suppressClick = true;
+      document.body.classList.add(DioramaComponent.DRAGGING_CLASS);
+    }
+  }
+
+  /**
+   * Suelta el arrastre.
+   */
+  private endDrag(): void {
+    this.press = null;
+    document.body.classList.remove(DioramaComponent.DRAGGING_CLASS);
+    if (this.grabbedAt !== null) {
+      this.grabbedAt = null;
+      this.experience?.releaseControl();
+      document.body.classList.remove(DioramaComponent.TUNING_CLASS);
+    }
+  }
+
+  /**
+   * Si el puntero baja sobre una tecla o perilla del osciloscopio, la usa (antes de que la cámara empiece a
+   * girar).
+   *
+   * @param event Evento de puntero.
+   */
+  private grabKnob(event: PointerEvent): void {
+    if (event.target !== this.canvas || !this.experience) {
+      return;
+    }
+    this.track(event);
+    if (this.experience.grabControl()) {
+      this.grabbedAt = event.clientY;
+      document.body.classList.add(DioramaComponent.TUNING_CLASS);
+    }
+  }
+
+  /**
+   * Gira la perilla tomada (si hay una) según el arrastre vertical.
+   *
+   * @param event Evento de puntero.
+   */
+  private turnKnob(event: PointerEvent): void {
+    if (this.grabbedAt !== null) {
+      this.suppressClick = true;
+      this.experience?.turnControl(this.grabbedAt - event.clientY);
+    }
+  }
+
+  /**
+   * Actualiza el puntero (para detectar marcadores y latas) y el tooltip.
    *
    * @param event Evento de puntero.
    */
@@ -162,28 +291,66 @@ export class DioramaComponent extends Component {
       (event.clientX / window.innerWidth) * 2 - 1,
       -(event.clientY / window.innerHeight) * 2 + 1,
     );
-    const hotspot = this.experience.hover();
-    this.tooltip.textContent = hotspot?.label ?? '';
-    this.tooltip.classList.toggle('diorama__tooltip--visible', hotspot !== null);
+    const label = this.pointedLabel(this.experience);
+    this.tooltip.textContent = label ?? '';
+    this.tooltip.classList.toggle('diorama__tooltip--visible', label !== null);
     this.tooltip.style.transform = `translate(${String(event.clientX + DioramaComponent.TOOLTIP_OFFSET)}px, ${String(event.clientY)}px)`;
-    document.body.classList.toggle('is-pointing', hotspot !== null);
+    document.body.classList.toggle('is-pointing', label !== null);
   }
 
   /**
-   * Si el clic cae sobre un marcador (y no sobre contenido), navega a su sección.
+   * Texto del tooltip para lo que está bajo el puntero: un marcador, una lata de la vitrina o un control del
+   * osciloscopio (en ese orden).
+   *
+   * @param experience Experiencia 3D.
+   * @returns Texto o `null` si no se señala nada interactivo.
+   */
+  private pointedLabel(experience: DioramaExperience): string | null {
+    const hotspot = experience.hover();
+    const item = experience.hoverItem();
+    const control = experience.hoverControl();
+    if (hotspot) {
+      return hotspot.label;
+    }
+    if (item !== null) {
+      return experience.itemName(item);
+    }
+    return control === null ? null : experience.controlLabel(control);
+  }
+
+  /**
+   * Si el clic cae sobre la escena (no sobre contenido ni al final de un arrastre), activa lo señalado.
    *
    * @param event Evento de clic.
    */
   private select(event: MouseEvent): void {
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest(DioramaComponent.INTERACTIVE_SELECTOR)) {
+    if (this.suppressClick || target?.closest(DioramaComponent.INTERACTIVE_SELECTOR)) {
+      this.suppressClick = false;
       return;
     }
     this.track(event);
-    const hotspot = this.experience?.hover();
+    if (this.experience) {
+      this.activate(this.experience);
+    }
+  }
+
+  /**
+   * Activa lo que está bajo el puntero: un marcador lleva a su sección y una lata la elige en la vitrina
+   * y lleva a la sección de la vitrina.
+   *
+   * @param experience Experiencia 3D.
+   */
+  private activate(experience: DioramaExperience): void {
+    const hotspot = experience.hover();
+    const item = experience.hoverItem();
     if (hotspot) {
-      this.experience?.select();
-      this.scroll.scrollTo(hotspot.sectionId);
+      experience.select();
+      this.navigator.go(hotspot.sectionId);
+    } else if (item !== null) {
+      experience.select();
+      this.events.emit('showcasePicked', item);
+      this.navigator.go(experience.showcaseSection);
     }
   }
 }

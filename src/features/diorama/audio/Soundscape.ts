@@ -12,7 +12,8 @@ import { SwitchSound } from './SwitchSound';
 import { ThunderSound } from './ThunderSound';
 
 /**
- * Paisaje sonoro del diorama (patrón Facade): lluvia suave, lofi de fondo y efectos sintetizados.
+ * Paisaje sonoro del diorama (patrón Facade): lluvia suave (si el clima la tiene), lofi de fondo y efectos
+ * sintetizados.
  * La escena le habla siempre igual; mientras el navegador no permita sonar, las llamadas no hacen nada
  * y las voces se crean en cuanto el audio arranca.
  */
@@ -37,8 +38,12 @@ export class Soundscape implements Updatable {
    * Crea el paisaje sonoro.
    *
    * @param engine Motor de audio compartido.
+   * @param raining Si suena la lluvia de fondo.
    */
-  public constructor(private readonly engine: AudioEngine) {
+  public constructor(
+    private readonly engine: AudioEngine,
+    private readonly raining: boolean,
+  ) {
     this.neon = {
       setPower: (level: number): void => {
         this.neonLevel = level;
@@ -109,7 +114,7 @@ export class Soundscape implements Updatable {
   }
 
   /**
-   * Crea las voces la primera vez que el audio suena y arranca la lluvia y la música.
+   * Crea las voces la primera vez que el audio suena y arranca la música (y la lluvia, si llueve).
    */
   private ensureStarted(): void {
     const { audioContext: context, output } = this.engine;
@@ -118,9 +123,11 @@ export class Soundscape implements Updatable {
     }
     this.voices = Soundscape.createVoices(context, output);
     this.voices.hum.setPower(this.neonLevel);
-    this.voices.rain.start().catch((error: unknown) => {
-      console.warn('No fue posible cargar la lluvia', error);
-    });
+    if (this.raining) {
+      this.voices.rain.start().catch((error: unknown) => {
+        console.warn('No fue posible cargar la lluvia', error);
+      });
+    }
     this.voices.music.start();
   }
 

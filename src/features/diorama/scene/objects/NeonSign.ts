@@ -1,4 +1,4 @@
-import { Mesh, MeshBasicMaterial, PlaneGeometry, PointLight } from 'three';
+import { AdditiveBlending, Mesh, MeshBasicMaterial, PlaneGeometry, PointLight } from 'three';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { Powerable } from '../../models/Powerable';
@@ -16,8 +16,13 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
   private static readonly FLICKER = { chance: 0.0035, duration: 0.14, dim: 0.25 };
   private static readonly TUBE = { glow: 26, core: '#fff4fa', lineWidth: 5 };
   private static readonly LIGHT_OFFSET = 0.55;
+  private static readonly EDGE_FADE = 0.16;
 
-  private readonly material = new MeshBasicMaterial({ transparent: true, depthWrite: false });
+  private readonly material = new MeshBasicMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  });
   private readonly light: PointLight;
   private readonly mirrors: Powerable[] = [];
   private level = 0;
@@ -111,6 +116,7 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
       this.options.lines.forEach((line, index) => {
         this.drawTube(context, line, width / 2, step * (index + 1));
       });
+      NeonSign.fadeEdges(context, width, height);
     });
   }
 
@@ -140,5 +146,30 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
     context.shadowBlur = NeonSign.TUBE.glow / 2;
     context.fillStyle = NeonSign.TUBE.core;
     context.fillText(line.text, x, y);
+  }
+
+  /**
+   * Desvanece el halo hacia los bordes del letrero, para que el resplandor no termine en un corte recto
+   * (se veía como un recuadro de luz alrededor del texto).
+   *
+   * @param context Contexto 2D ya dibujado.
+   * @param width Ancho del canvas.
+   * @param height Alto del canvas.
+   */
+  private static fadeEdges(context: CanvasRenderingContext2D, width: number, height: number): void {
+    const fade = NeonSign.EDGE_FADE;
+    context.save();
+    context.globalCompositeOperation = 'destination-in';
+    [context.createLinearGradient(0, 0, width, 0), context.createLinearGradient(0, 0, 0, height)].forEach(
+      (gradient) => {
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        gradient.addColorStop(fade, 'rgba(0, 0, 0, 1)');
+        gradient.addColorStop(1 - fade, 'rgba(0, 0, 0, 1)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, width, height);
+      },
+    );
+    context.restore();
   }
 }

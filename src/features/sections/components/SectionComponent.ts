@@ -1,19 +1,44 @@
 import { Component } from '@shared/core/component/Component';
 import { ElementBuilder } from '@shared/core/dom/ElementBuilder';
+import type { PidLoopService } from '@shared/control/PidLoopService';
+import type { AppEventBus } from '@shared/core/events/AppEventBus';
 import type { Section } from '../models/Section';
 import type { SectionItem } from '../models/SectionItem';
 import type { SectionLink } from '../models/SectionLink';
+import { ItemCard } from './ItemCard';
+import { PidTunerComponent } from './PidTunerComponent';
+import { ShowcaseComponent } from './ShowcaseComponent';
 
 /**
- * Una sección de contenido: tarjeta de vidrio con texto, etiquetas, elementos y enlaces.
+ * Una sección de contenido: tarjeta de vidrio con botón para volver a la vista general, texto, etiquetas,
+ * elementos y enlaces.
+ * Si la sección es una vitrina, sus elementos se recorren de uno en uno con {@link ShowcaseComponent}; si
+ * tiene sintonizador, muestra {@link PidTunerComponent} antes de sus elementos.
  */
 export class SectionComponent extends Component {
+  private readonly showcase = ElementBuilder.create('div').classes('section__showcase').build();
+  private readonly tuner = ElementBuilder.create('div').classes('section__tuner').build();
+  private readonly back = ElementBuilder.create('button')
+    .classes('section__back')
+    .attr('type', 'button')
+    .attr('aria-label', 'Volver a la vista general')
+    .text('← Volver')
+    .build();
+
   /**
    * Crea la sección.
    *
    * @param section Datos de la sección.
+   * @param events Bus de eventos de la aplicación (la vitrina avisa qué elemento se eligió).
+   * @param loop Lazo PID del osciloscopio (para el sintonizador).
+   * @param onBack Se llama al pulsar "Volver".
    */
-  public constructor(private readonly section: Section) {
+  public constructor(
+    private readonly section: Section,
+    private readonly events: AppEventBus,
+    private readonly loop: PidLoopService,
+    private readonly onBack: () => void,
+  ) {
     super();
   }
 
@@ -31,9 +56,26 @@ export class SectionComponent extends Component {
   }
 
   /**
-   * Las secciones solo contienen enlaces nativos; no requieren eventos propios.
+   * @inheritdoc
    */
-  protected override bindEvents(): void {}
+  protected override bindEvents(): void {
+    this.listen(this.back, 'click', () => {
+      this.onBack();
+    });
+  }
+
+  /**
+   * @inheritdoc
+   */
+  protected override onMount(): void {
+    const { showcase, tuner, items = [] } = this.section;
+    if (showcase && items.length > 0) {
+      this.mountChild(new ShowcaseComponent(items, this.events), this.showcase);
+    }
+    if (tuner) {
+      this.mountChild(new PidTunerComponent(this.loop), this.tuner);
+    }
+  }
 
   /**
    * Tarjeta con todo el contenido de la sección.
@@ -41,36 +83,33 @@ export class SectionComponent extends Component {
    * @returns Elemento de la tarjeta.
    */
   private card(): HTMLElement {
-    const { id, eyebrow, title, paragraphs, tags = [], items = [], links = [] } = this.section;
+    const { tags = [], items = [], links = [], showcase, tuner } = this.section;
+    const body = showcase ? [this.showcase] : SectionComponent.itemList(items);
+    const extras = tuner ? [this.tuner] : [];
     return ElementBuilder.create('article')
       .classes('section__card')
       .children(
-        ElementBuilder.create('p').classes('section__eyebrow').text(eyebrow).build(),
-        ElementBuilder.create('h2').classes('section__title').attr('id', `${id}-title`).text(title).build(),
-        ...paragraphs.map((text) => ElementBuilder.create('p').classes('section__text').text(text).build()),
-        ...SectionComponent.tagList(tags),
-        ...SectionComponent.itemList(items),
+        this.back,
+        ...this.heading(),
+        ...ItemCard.tags(tags),
+        ...extras,
+        ...body,
         ...SectionComponent.linkList(links),
       )
       .build();
   }
 
   /**
-   * Lista de etiquetas.
+   * Antetítulo, título y párrafos de la sección.
    *
-   * @param tags Etiquetas.
-   * @returns Lista, o vacío si no hay etiquetas.
+   * @returns Elementos del encabezado.
    */
-  private static tagList(tags: readonly string[]): HTMLElement[] {
-    if (tags.length === 0) {
-      return [];
-    }
-    const chips = tags.map((tag) => ElementBuilder.create('li').classes('tag').text(tag).build());
+  private heading(): HTMLElement[] {
+    const { id, eyebrow, title, paragraphs } = this.section;
     return [
-      ElementBuilder.create('ul')
-        .classes('section__tags')
-        .children(...chips)
-        .build(),
+      ElementBuilder.create('p').classes('section__eyebrow').text(eyebrow).build(),
+      ElementBuilder.create('h2').classes('section__title').attr('id', `${id}-title`).text(title).build(),
+      ...paragraphs.map((text) => ElementBuilder.create('p').classes('section__text').text(text).build()),
     ];
   }
 
@@ -84,34 +123,13 @@ export class SectionComponent extends Component {
     if (items.length === 0) {
       return [];
     }
-    const cards = items.map((item) => SectionComponent.item(item));
+    const cards = items.map((item) => new ItemCard(item).build());
     return [
       ElementBuilder.create('div')
         .classes('section__items')
         .children(...cards)
         .build(),
     ];
-  }
-
-  /**
-   * Tarjeta de un elemento.
-   *
-   * @param item Elemento.
-   * @returns Elemento del DOM.
-   */
-  private static item(item: SectionItem): HTMLElement {
-    const meta = item.meta ? [ElementBuilder.create('p').classes('item__meta').text(item.meta).build()] : [];
-    const link = item.link ? [SectionComponent.anchor(item.link, 'item__link')] : [];
-    return ElementBuilder.create('article')
-      .classes('item')
-      .children(
-        ...meta,
-        ElementBuilder.create('h3').classes('item__title').text(item.title).build(),
-        ElementBuilder.create('p').classes('item__text').text(item.description).build(),
-        ...SectionComponent.tagList(item.tags ?? []),
-        ...link,
-      )
-      .build();
   }
 
   /**
@@ -124,29 +142,12 @@ export class SectionComponent extends Component {
     if (links.length === 0) {
       return [];
     }
-    const anchors = links.map((link) => SectionComponent.anchor(link, 'section__link'));
+    const anchors = links.map((link) => ItemCard.anchor(link, 'section__link'));
     return [
       ElementBuilder.create('nav')
         .classes('section__links')
         .children(...anchors)
         .build(),
     ];
-  }
-
-  /**
-   * Enlace externo seguro (nueva pestaña sin acceso a `window.opener`).
-   *
-   * @param link Enlace.
-   * @param className Clase CSS.
-   * @returns Elemento `<a>`.
-   */
-  private static anchor(link: SectionLink, className: string): HTMLAnchorElement {
-    return ElementBuilder.create('a')
-      .classes(className)
-      .attr('href', link.href)
-      .attr('target', '_blank')
-      .attr('rel', 'noopener noreferrer')
-      .text(link.label)
-      .build();
   }
 }

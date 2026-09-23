@@ -26,7 +26,7 @@ export class StallInterior extends SceneObject implements Powerable {
   private static readonly BULB = { radius: 0.07, glow: 9, x: 0, y: 2.2, z: 0.45 };
   private static readonly SHADE = { radius: 0.2, height: 0.16, y: 2.32 };
   private static readonly SHELF = { width: 4, height: 0.05, depth: 0.28, y: 1.72, z: -1.5 };
-  private static readonly MENU = { width: 0.42, height: 0.62, y: 2.25, z: -1.61, glow: 0.55 };
+  private static readonly MENU = { width: 0.42, height: 0.62, y: 2.25, z: -1.61, glow: 0.3 };
   private static readonly MENU_ITEMS = [
     { dish: '醤油', price: '700' },
     { dish: '味噌', price: '800' },

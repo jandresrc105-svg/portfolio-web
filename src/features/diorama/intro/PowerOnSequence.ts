@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import type { CameraRig } from '../camera/CameraRig';
+import type { CameraDirector } from '../camera/CameraDirector';
 import { PowerMode } from '../models/PowerMode';
 import type { PowerStep } from '../models/PowerStep';
 
@@ -24,19 +24,19 @@ export class PowerOnSequence {
   /**
    * Reproduce la secuencia.
    *
-   * @param rig Cámara del diorama.
+   * @param camera Cámara del diorama.
    * @param steps Elementos a encender y cuándo.
    * @param instant Saltar al estado final (movimiento reducido).
    * @returns Promesa que se resuelve al terminar.
    */
-  public play(rig: CameraRig, steps: readonly PowerStep[], instant: boolean): Promise<void> {
+  public play(camera: CameraDirector, steps: readonly PowerStep[], instant: boolean): Promise<void> {
     return new Promise((resolve) => {
       const timeline = gsap.timeline({
         onComplete: () => {
           resolve();
         },
       });
-      timeline.to(rig, { intro: 1, ...PowerOnSequence.FLIGHT }, 0);
+      timeline.to(camera, { intro: 1, ...PowerOnSequence.FLIGHT }, 0);
       steps.forEach((step) => {
         PowerOnSequence.schedule(timeline, step);
       });

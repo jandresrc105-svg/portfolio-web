@@ -11,33 +11,154 @@
     "tags": ["Ingeniería electrónica", "Automatización", "Control", "Desarrollo web"]
   },
   {
-    "id": "proyectos",
-    "eyebrow": "02 — Proyectos",
-    "title": "Lo que he construido",
+    "id": "tecnologias",
+    "eyebrow": "02 — Tecnologías",
+    "title": "Lo que manejo",
     "align": "left",
-    "paragraphs": ["Cada lata de la máquina es un proyecto. Estos son algunos de los que más disfruté."],
+    "showcase": true,
+    "paragraphs": [
+      "Cada lata de la máquina es una tecnología: recórrelas con las flechas o haz clic en una lata."
+    ],
     "items": [
       {
-        "title": "Portafolio 3D",
-        "meta": "2026 · Personal",
-        "description": "Este sitio: diorama procedural en Three.js, lluvia calculada en GPU, reflejos planares y una arquitectura POO con inyección de dependencias.",
-        "tags": ["TypeScript", "Three.js", "GSAP", "Sass"],
-        "link": {
-          "label": "Ver código",
-          "href": "https://github.com/jandresrc105-svg/portfolio-web"
-        }
+        "title": "HTML, CSS y JavaScript",
+        "can": "web",
+        "meta": "Frontend · Base",
+        "description": "La base de todo lo que construyo en la web: maquetación semántica y accesible, estilos con Sass y BEM, y JavaScript moderno.",
+        "tags": ["HTML5", "CSS3", "Sass", "JavaScript"]
       },
       {
-        "title": "Proyecto destacado",
-        "meta": "Año · Contexto",
-        "description": "Reemplaza este texto con el problema que resolviste, cómo lo hiciste y el resultado medible.",
-        "tags": ["Tecnología", "Tecnología"]
+        "title": "TypeScript",
+        "can": "typescript",
+        "meta": "Frontend · Lenguaje",
+        "description": "Mi lenguaje por defecto: tipado estricto, POO e interfaces claras. Este portafolio está escrito en TypeScript.",
+        "tags": ["Tipado estricto", "POO", "Genéricos"]
       },
       {
-        "title": "Proyecto de automatización",
-        "meta": "Año · Contexto",
-        "description": "Un proyecto donde se cruzan la electrónica y el software: control, sensores, dashboards o IoT.",
-        "tags": ["Control", "Hardware"]
+        "title": "React",
+        "can": "react",
+        "meta": "Frontend · Framework",
+        "description": "Interfaces por componentes con hooks, manejo de estado y enrutamiento.",
+        "tags": ["Hooks", "Componentes", "SPA"]
+      },
+      {
+        "title": "Vue",
+        "can": "vue",
+        "meta": "Frontend · Framework",
+        "description": "Interfaces reactivas con componentes de archivo único y Composition API.",
+        "tags": ["Composition API", "SFC"]
+      },
+      {
+        "title": "Angular",
+        "can": "angular",
+        "meta": "Frontend · Framework",
+        "description": "Aplicaciones estructuradas con módulos, servicios, inyección de dependencias y RxJS.",
+        "tags": ["RxJS", "Inyección de dependencias", "Formularios"]
+      },
+      {
+        "title": "Three.js, WebGL y GLSL",
+        "can": "threejs",
+        "meta": "Gráficos 3D",
+        "description": "Escenas 3D en el navegador, shaders propios y post-procesado. Este diorama es un ejemplo.",
+        "tags": ["Three.js", "WebGL", "GLSL", "GSAP"]
+      },
+      {
+        "title": "Node.js",
+        "can": "node",
+        "meta": "Backend",
+        "description": "APIs REST y servicios en JavaScript y TypeScript del lado del servidor.",
+        "tags": ["APIs REST", "npm", "TypeScript"]
+      },
+      {
+        "title": ".NET y C#",
+        "can": "dotnet",
+        "meta": "Backend",
+        "description": "Aplicaciones y APIs con C# y .NET, organizadas por capas.",
+        "tags": ["C#", ".NET", "APIs"]
+      },
+      {
+        "title": "Unity",
+        "can": "unity",
+        "meta": "Videojuegos y 3D",
+        "description": "Experiencias interactivas y simulaciones en tiempo real programadas en C#.",
+        "tags": ["C#", "Física", "Tiempo real"]
+      },
+      {
+        "title": "Python",
+        "can": "python",
+        "meta": "Lenguaje",
+        "description": "Automatización de tareas, scripts, análisis de datos y prototipos rápidos.",
+        "tags": ["Scripts", "Datos", "Automatización"]
+      },
+      {
+        "title": "MicroPython",
+        "can": "micropython",
+        "meta": "Embebidos",
+        "description": "Python directamente en microcontroladores para prototipar hardware con rapidez.",
+        "tags": ["ESP32", "Sensores", "Prototipos"]
+      },
+      {
+        "title": "C y C++",
+        "can": "cpp",
+        "meta": "Embebidos",
+        "description": "Firmware para microcontroladores: periféricos, tiempos y manejo de memoria.",
+        "tags": ["Firmware", "Microcontroladores"]
+      },
+      {
+        "title": "Sistemas embebidos",
+        "can": "embedded",
+        "meta": "Hardware · IoT",
+        "description": "Prototipos con Arduino, ESP32 y Raspberry Pi: sensores, actuadores y comunicación IoT por MQTT.",
+        "tags": ["Arduino", "ESP32", "Raspberry Pi", "MQTT"]
+      },
+      {
+        "title": "Automatización y control",
+        "can": "automation",
+        "meta": "Ingeniería",
+        "description": "Control de procesos con PLC y SCADA, y modelado y simulación de sistemas en MATLAB y Simulink.",
+        "tags": ["PLC", "SCADA", "MATLAB", "Simulink"]
+      },
+      {
+        "title": "Inteligencia artificial",
+        "can": "ai",
+        "meta": "IA",
+        "description": "Integro modelos de IA en aplicaciones y los uso como herramienta diaria de desarrollo.",
+        "tags": ["LLMs", "APIs de IA", "Prompting"]
+      },
+      {
+        "title": "SQL y PostgreSQL",
+        "can": "sql",
+        "meta": "Datos",
+        "description": "Bases de datos relacionales: modelado, consultas, índices y migraciones.",
+        "tags": ["SQL", "PostgreSQL", "Modelado"]
+      },
+      {
+        "title": "MongoDB",
+        "can": "mongodb",
+        "meta": "Datos",
+        "description": "Bases de datos documentales para esquemas flexibles.",
+        "tags": ["NoSQL", "Agregaciones"]
+      },
+      {
+        "title": "Docker y Linux",
+        "can": "docker",
+        "meta": "DevOps",
+        "description": "Contenedores para entornos reproducibles y despliegue en servidores Linux.",
+        "tags": ["Docker", "Compose", "Linux", "Bash"]
+      },
+      {
+        "title": "AWS",
+        "can": "aws",
+        "meta": "Nube",
+        "description": "Despliegue y alojamiento de aplicaciones en la nube de AWS.",
+        "tags": ["Nube", "Despliegue"]
+      },
+      {
+        "title": "Git, CI/CD y testing",
+        "can": "git",
+        "meta": "Flujo de trabajo",
+        "description": "Control de versiones con ramas, integración continua con GitHub Actions y pruebas automatizadas con Vitest y Jest.",
+        "tags": ["Git", "GitHub Actions", "Vitest", "Jest"]
       }
     ]
   },
@@ -47,8 +168,9 @@
     "title": "Señal estable, respuesta rápida",
     "align": "left",
     "paragraphs": [
-      "La traza del osciloscopio no es un video: es un lazo de control simulado en vivo. La referencia es una onda cuadrada y la salida, la respuesta de un sistema de segundo orden con su sobrepico y asentamiento."
+      "La traza del osciloscopio no es un video: es un lazo de control PID simulado en vivo sobre una planta de tercer orden, con saturación del actuador y anti-windup. El osciloscopio funciona de verdad: enciéndelo o apágalo, congela la traza con RUN/STOP, cambia las escalas y ajusta Kp, Ki, Kd y la amplitud y frecuencia de la onda cuadrada."
     ],
+    "tuner": true,
     "items": [
       {
         "title": "Frontend",

@@ -4,7 +4,8 @@
   position: relative;
 
   &__content {
-    position: relative;
+    position: fixed;
+    inset: 0;
     z-index: $z-content;
     pointer-events: none;
   }

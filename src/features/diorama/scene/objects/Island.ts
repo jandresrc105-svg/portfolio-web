@@ -16,7 +16,7 @@ export class Island extends SceneObject {
   private static readonly ROCK_JITTER = 0.55;
   private static readonly WIDTH_JITTER = 0.3;
   private static readonly HASH = { x: 12.9898, y: 37.719, z: 78.233, scale: 43758.5453 };
-  private static readonly SIDEWALK = { width: 5.6, height: 0.1, depth: 3.9, x: 0, y: 0.05, z: -0.35 };
+  private static readonly SIDEWALK = { width: 5.6, height: 0.1, depth: 4.4, x: 0, y: 0.05, z: -0.1 };
 
   /**
    * Crea la isla.

@@ -14,10 +14,14 @@ export interface QualityProfile {
   readonly reflections: boolean;
   /** Número de gotas de lluvia. */
   readonly rainDrops: number;
+  /** Número de salpicaduras de lluvia simultáneas sobre el suelo. */
+  readonly splashes: number;
   /** Número de edificios de la ciudad de fondo. */
   readonly buildings: number;
   /** Escala máxima de resolución interna (> 1 = supersampling si los FPS lo permiten). */
   readonly maxResolutionScale: number;
+  /** Escala mínima de resolución interna: por debajo de 1 la imagen se ve borrosa. */
+  readonly minResolutionScale: number;
   /** Factor de resolución de las texturas dibujadas en canvas. */
   readonly textureScale: number;
 }

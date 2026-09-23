@@ -7,19 +7,26 @@ import type { Updatable } from '@shared/engine/Updatable';
 import type { Hotspot } from '../models/Hotspot';
 import { PowerMode } from '../models/PowerMode';
 import type { PowerStep } from '../models/PowerStep';
-import type { SignalService } from '../services/SignalService';
+import type { Weather } from '../models/Weather';
+import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from './CanvasTextureFactory';
 import { PowerGroup } from './PowerGroup';
 import { Storm } from './Storm';
 import type { MaterialLibrary } from './MaterialLibrary';
+import type { DioramaSceneOptions } from './DioramaSceneOptions';
+import { Chef } from './characters/Chef';
+import { Juan } from './characters/Juan';
 import { CircuitBoard } from './objects/CircuitBoard';
 import { CitySkyline } from './objects/CitySkyline';
 import { CityBokeh } from './objects/CityBokeh';
+import { ContactShadows } from './objects/ContactShadows';
 import { FloatingDebris } from './objects/FloatingDebris';
 import { HotspotMarker } from './objects/HotspotMarker';
 import { Island } from './objects/Island';
+import { KitchenProps } from './objects/KitchenProps';
 import { Lantern } from './objects/Lantern';
 import { LightCone } from './objects/LightCone';
+import { ManekiNeko } from './objects/ManekiNeko';
 import { Moonlight } from './objects/Moonlight';
 import { NeonSign } from './objects/NeonSign';
 import { Noren } from './objects/Noren';
@@ -27,10 +34,15 @@ import { Oscilloscope } from './objects/Oscilloscope';
 import { Postbox } from './objects/Postbox';
 import { Puddles } from './objects/Puddles';
 import { Rain } from './objects/Rain';
+import { RainSplashes } from './objects/RainSplashes';
 import { RamenBowl } from './objects/RamenBowl';
+import { RoofDrips } from './objects/RoofDrips';
+import { SideBlinds } from './objects/SideBlinds';
 import { SkyDome } from './objects/SkyDome';
 import { Stall } from './objects/Stall';
 import { StallInterior } from './objects/StallInterior';
+import { StreetMarkings } from './objects/StreetMarkings';
+import { StringLights } from './objects/StringLights';
 import { UtilityPole } from './objects/UtilityPole';
 import { VendingMachine } from './objects/VendingMachine';
 
@@ -40,12 +52,13 @@ import { VendingMachine } from './objects/VendingMachine';
  */
 export class DioramaScene {
   private static readonly HOTSPOTS: Hotspot[] = [
-    { sectionId: 'sobre-mi', label: 'Sobre mí', anchor: { x: -0.55, y: 2.05, z: 1.95 } },
-    { sectionId: 'proyectos', label: 'Proyectos', anchor: { x: 3.55, y: 2.25, z: 0.35 } },
-    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: -1.2, y: 1.72, z: 0.8 } },
+    { sectionId: 'sobre-mi', label: 'Sobre mí', anchor: { x: 0.5, y: 2.08, z: 1.9 } },
+    { sectionId: 'tecnologias', label: 'Tecnologías', anchor: { x: 3.55, y: 2.25, z: 0.35 } },
+    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: -1.2, y: 1.6, z: 0.8 } },
     { sectionId: 'experiencia', label: 'Experiencia', anchor: { x: -3.75, y: 2.1, z: -0.6 } },
     { sectionId: 'contacto', label: 'Contacto', anchor: { x: -2.95, y: 1.6, z: 2.1 } },
   ];
+  private static readonly SHOWCASE_SECTION = 'tecnologias';
   private static readonly LANTERNS = [
     { anchor: { x: -2.35, y: 2.55, z: 1.62 }, glyph: '麺', phase: 0, at: 1.6 },
     { anchor: { x: 2.35, y: 2.55, z: 1.62 }, glyph: '灯', phase: 1.7, at: 1.95 },
@@ -85,26 +98,31 @@ export class DioramaScene {
   public storm: Storm | null = null;
   public mainSign: NeonSign | null = null;
   public puddles: Puddles | null = null;
+  public vending: VendingMachine | null = null;
+  public oscilloscope: Oscilloscope | null = null;
 
   private readonly objects: SceneObject[] = [];
   private readonly luminous: SceneObject[] = [];
+  private readonly materials: MaterialLibrary;
+  private readonly textures: CanvasTextureFactory;
+  private readonly random: SeededRandom;
+  private readonly quality: QualityProfile;
+  private readonly instrument: ScopeControlService;
+  private readonly weather: Weather;
 
   /**
    * Prepara el diorama.
    *
-   * @param materials Materiales compartidos.
-   * @param textures Fábrica de texturas de canvas.
-   * @param random Generador determinista.
-   * @param quality Perfil de calidad.
-   * @param signal Service del lazo de control para el osciloscopio.
+   * @param options Materiales, texturas, azar, calidad, lazo de control y clima.
    */
-  public constructor(
-    private readonly materials: MaterialLibrary,
-    private readonly textures: CanvasTextureFactory,
-    private readonly random: SeededRandom,
-    private readonly quality: QualityProfile,
-    private readonly signal: SignalService,
-  ) {}
+  public constructor(options: DioramaSceneOptions) {
+    this.materials = options.materials;
+    this.textures = options.textures;
+    this.random = options.random;
+    this.quality = options.quality;
+    this.instrument = options.instrument;
+    this.weather = options.weather;
+  }
 
   /**
    * Posición del letrero principal, fuente del zumbido de neón.
@@ -114,6 +132,35 @@ export class DioramaScene {
   public get neonPosition(): Vector3Like {
     const { x, y, z } = DioramaScene.MAIN_SIGN;
     return { x, y, z };
+  }
+
+  /**
+   * Puntos interactivos del diorama, en el orden de las secciones.
+   *
+   * @returns Lista de puntos interactivos.
+   */
+  public get hotspots(): readonly Hotspot[] {
+    return DioramaScene.HOTSPOTS;
+  }
+
+  /**
+   * Sección de la página que muestra la vitrina.
+   *
+   * @returns Id de la sección.
+   */
+  public get showcaseSection(): string {
+    return DioramaScene.SHOWCASE_SECTION;
+  }
+
+  /**
+   * Encuadre de cámara de la vitrina (el hero es el encuadre 0).
+   *
+   * @returns Índice del encuadre.
+   */
+  public get showcaseStop(): number {
+    return (
+      DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.SHOWCASE_SECTION) + 1
+    );
   }
 
   /**
@@ -145,32 +192,45 @@ export class DioramaScene {
   }
 
   /**
-   * Cielo, luna, ciudad de fondo y la tormenta que los ilumina.
+   * Luna y fondo oscuro; según el clima, también el cielo con nubes, la ciudad y la tormenta que los ilumina.
    *
    * @param scene Escena (para fondo y niebla).
    */
   private buildSky(scene: Scene): void {
-    const moonlight = this.register(new Moonlight(scene));
+    const moonlight = this.register(new Moonlight(scene, this.weather.fog));
+    if (!this.weather.backdrop) {
+      return;
+    }
     const sky = this.animate(new SkyDome());
     const city = this.register(new CitySkyline(this.quality.buildings, this.random));
-    this.storm = new Storm(moonlight.moon, sky, city, this.random);
-    this.updatables.push(this.storm);
-    this.powerSteps.push({ target: this.storm, at: DioramaScene.TIMELINE.markers, mode: PowerMode.Fade });
+    if (this.weather.storm) {
+      this.storm = new Storm(moonlight.moon, sky, city, this.random);
+      this.updatables.push(this.storm);
+      this.powerSteps.push({ target: this.storm, at: DioramaScene.TIMELINE.markers, mode: PowerMode.Fade });
+    }
   }
 
   /**
-   * Isla flotante, charcos, escombros, lluvia y luces lejanas.
+   * Isla flotante con marcas viales y charcos; según el clima, lluvia con salpicaduras, rocas flotantes
+   * y luces lejanas de la ciudad.
    */
   private buildEnvironment(): void {
     this.register(new Island(this.materials, this.random));
-    this.puddles = this.register(new Puddles(this.quality.reflections, this.random));
-    this.animate(new FloatingDebris(this.materials, this.random));
-    this.animate(new Rain(this.quality.rainDrops, this.random));
-    this.animate(new CityBokeh(this.textures, this.random));
+    this.register(new StreetMarkings(this.textures, this.random));
+    this.register(new ContactShadows(this.textures));
+    this.puddles = this.animate(new Puddles(this.quality.reflections, this.random));
+    if (this.weather.rain) {
+      this.animate(new RainSplashes(this.quality.splashes, this.random));
+      this.animate(new Rain(this.quality.rainDrops, this.random));
+    }
+    if (this.weather.backdrop) {
+      this.animate(new FloatingDebris(this.materials, this.random));
+      this.animate(new CityBokeh(this.textures, this.random));
+    }
   }
 
   /**
-   * Puesto: estructura, interior, cortinas y faroles.
+   * Puesto: estructura, interior, cortinas, goteras (si llueve), cocina, cocinero, comensal, guirnalda y faroles.
    */
   private buildStall(): void {
     this.register(new Stall(this.materials));
@@ -180,6 +240,11 @@ export class DioramaScene {
       PowerMode.Fade,
     );
     this.animate(new Noren(this.textures));
+    if (this.weather.rain) {
+      this.animate(new RoofDrips(this.random));
+    }
+    this.animate(new SideBlinds(this.textures));
+    this.buildLife();
     DioramaScene.LANTERNS.forEach(({ anchor, glyph, phase, at }) => {
       const lantern = this.glow(
         this.animate(new Lantern(this.materials, this.textures, anchor, glyph, phase)),
@@ -189,7 +254,21 @@ export class DioramaScene {
   }
 
   /**
-   * Letreros de neón y objetos sobre la barra: ramen, osciloscopio y placa.
+   * Vida dentro del puesto: cocina humeante, cocinero, comensal y guirnalda de bombillos.
+   */
+  private buildLife(): void {
+    this.animate(new KitchenProps(this.materials, this.random));
+    this.animate(new Chef());
+    this.animate(new Juan());
+    this.power(
+      this.glow(this.animate(new StringLights(this.materials))),
+      DioramaScene.TIMELINE.interior,
+      PowerMode.Fade,
+    );
+  }
+
+  /**
+   * Letreros de neón y objetos sobre la barra: ramen, gato de la suerte, osciloscopio y placa.
    */
   private buildCounter(): void {
     this.mainSign = this.glow(this.animate(this.createMainSign()));
@@ -199,11 +278,22 @@ export class DioramaScene {
       DioramaScene.TIMELINE.sideSign,
       PowerMode.Strike,
     );
-    this.animate(new RamenBowl(this.materials, this.textures, this.random));
-    const oscilloscope = this.animate(new Oscilloscope(this.materials, this.textures, this.signal));
+    this.animate(new RamenBowl(this.textures, this.random));
+    this.animate(new ManekiNeko());
+    this.buildLab();
+  }
+
+  /**
+   * Banco de pruebas sobre la barra: osciloscopio y placa del controlador con su motor y la sonda.
+   */
+  private buildLab(): void {
+    const oscilloscope = this.animate(new Oscilloscope(this.materials, this.textures, this.instrument));
+    this.oscilloscope = oscilloscope;
     this.power(oscilloscope, DioramaScene.TIMELINE.electronics, PowerMode.Fade);
     this.power(
-      this.animate(new CircuitBoard(this.materials)),
+      this.animate(
+        new CircuitBoard(this.textures, this.instrument.loop, (target) => oscilloscope.probePort(target)),
+      ),
       DioramaScene.TIMELINE.electronics,
       PowerMode.Fade,
     );
@@ -220,7 +310,8 @@ export class DioramaScene {
       at: DioramaScene.TIMELINE.street,
       mode: PowerMode.Strike,
     });
-    this.power(this.glow(new VendingMachine(this.textures)), DioramaScene.TIMELINE.vending, PowerMode.Strike);
+    this.vending = this.glow(this.animate(new VendingMachine(this.textures)));
+    this.power(this.vending, DioramaScene.TIMELINE.vending, PowerMode.Strike);
     this.register(new Postbox(this.materials));
   }
 
@@ -229,7 +320,7 @@ export class DioramaScene {
    */
   private buildMarkers(): void {
     DioramaScene.HOTSPOTS.forEach((hotspot, index) => {
-      const marker = this.glow(this.animate(new HotspotMarker(hotspot)));
+      const marker = this.animate(new HotspotMarker(hotspot));
       this.markers.push(marker);
       const { markers, markerStagger } = DioramaScene.TIMELINE;
       this.power(marker, markers + index * markerStagger, PowerMode.Fade);

@@ -1,0 +1,127 @@
+@use '../abstracts' as *;
+
+.section-nav {
+  position: fixed;
+  top: 50%;
+  right: $space-sm;
+  z-index: $z-tooltip;
+  display: grid;
+  justify-items: end;
+  gap: $space-md;
+  transform: translateY(-50%);
+  animation: section-nav-in 1s $ease-out 0.4s both;
+
+  &__list {
+    display: grid;
+    gap: $space-xs;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__stop {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $space-sm;
+    padding: $space-xs;
+    border: 0;
+    background: none;
+    color: $color-muted;
+    font-family: $font-mono;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      color: $color-text;
+      outline: none;
+
+      .section-nav__label {
+        opacity: 1;
+        transform: none;
+      }
+
+      .section-nav__dot {
+        border-color: $color-cyan;
+      }
+    }
+
+    &--active {
+      color: $color-cyan;
+
+      .section-nav__label {
+        opacity: 1;
+        transform: none;
+      }
+
+      .section-nav__dot {
+        border-color: $color-cyan;
+        background: $color-cyan;
+        box-shadow: 0 0 12px rgba($color-cyan, 0.8);
+        transform: scale(1.25);
+      }
+    }
+  }
+
+  &__label {
+    display: none;
+    opacity: 0;
+    transform: translateX(6px);
+    transition:
+      opacity 0.3s ease,
+      transform 0.3s $ease-out;
+  }
+
+  &__dot {
+    width: 10px;
+    height: 10px;
+    border: 1px solid rgba($color-text, 0.4);
+    border-radius: $radius-pill;
+    background: rgba($color-night, 0.6);
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.3s ease,
+      transform 0.3s $ease-out;
+  }
+
+  &__hint {
+    display: none;
+    max-width: 9rem;
+    color: $color-muted;
+    font-family: $font-mono;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-align: right;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  @include from('md') {
+    right: $space-lg;
+
+    &__label,
+    &__hint {
+      display: block;
+    }
+  }
+
+  @include reduced-motion {
+    animation: none;
+  }
+}
+
+@keyframes section-nav-in {
+  from {
+    opacity: 0;
+    transform: translate(12px, -50%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+}

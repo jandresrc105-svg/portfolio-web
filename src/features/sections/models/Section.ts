@@ -21,4 +21,8 @@ export interface Section {
   readonly items?: readonly SectionItem[];
   /** Enlaces de la sección. */
   readonly links?: readonly SectionLink[];
+  /** Muestra los elementos de uno en uno como vitrina navegable (cada uno enlazado a un objeto 3D). */
+  readonly showcase?: boolean;
+  /** Muestra el panel para sintonizar en vivo el PID del osciloscopio. */
+  readonly tuner?: boolean;
 }

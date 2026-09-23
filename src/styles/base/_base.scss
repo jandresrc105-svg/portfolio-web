@@ -1,23 +1,15 @@
 @use '../abstracts' as *;
 
 html {
+  height: 100%;
+  overflow: hidden;
   background: $color-night;
-
-  &.lenis {
-    height: auto;
-  }
-
-  &.lenis-smooth {
-    scroll-behavior: auto !important;
-  }
-
-  &.lenis-stopped {
-    overflow: hidden;
-  }
 }
 
 body {
-  min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   background: $color-night;
   color: $color-text;
   font-family: $font-body;
@@ -26,6 +18,11 @@ body {
 
   &.is-pointing {
     cursor: pointer;
+  }
+
+  &.is-dragging {
+    cursor: grabbing;
+    user-select: none;
   }
 
   ::selection {
