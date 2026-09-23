@@ -10,6 +10,7 @@ import {
   type Mesh,
   type Texture,
 } from 'three';
+import { RenderLayer } from './RenderLayer';
 import type { ProxyKind } from './ProxyKind';
 
 /**
@@ -20,7 +21,7 @@ import type { ProxyKind } from './ProxyKind';
  * copia el lote por vértice en cada frame.
  */
 export class ProxyKey {
-  private static readonly CAMERA_ONLY = 1;
+  private static readonly OWN_LAYERS = (1 << RenderLayer.Default) | (1 << RenderLayer.Gated);
   private static readonly RESERVED = ['color', 'proxyEmissive', 'proxyRoughMetal', 'proxyVisible'];
   private static readonly PHYSICAL = 'MeshPhysicalMaterial';
 
@@ -117,7 +118,7 @@ export class ProxyKey {
    * @returns `true` si se puede llevar al mundo sin cambiar su aspecto.
    */
   private placed(mesh: Mesh): boolean {
-    const extraLayers = (mesh.layers.mask & ~ProxyKey.CAMERA_ONLY) !== 0;
+    const extraLayers = (mesh.layers.mask & ~ProxyKey.OWN_LAYERS) !== 0;
     return !extraLayers && mesh.matrixWorld.determinant() > 0;
   }
 

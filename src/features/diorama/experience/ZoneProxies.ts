@@ -6,17 +6,21 @@ import type { UpdateScheduler } from '@shared/engine/UpdateScheduler';
 
 /**
  * Versiones unidas del diorama por zona (patrón Mediator entre las paradas, las versiones unidas y el
- * planificador): el taller se reemplaza fuera de sus paradas y la calle en la vista general y en las paradas del
- * taller. En la parada de una zona siempre se ve la original, que es la que se puede usar. Junta las piezas
- * quietas de las dos zonas para que el planificador deje de recalcular sus matrices.
+ * planificador): las dos zonas (taller y calle) se dibujan unidas en todas las paradas; lo que el visitante
+ * mueve o lo que se anima se saca solo del lote y se ve como original. Al cambiar de parada se vuelve a meter en
+ * los lotes lo que ya quedó quieto. Las piezas quietas dejan de recalcular sus matrices, salvo las de la zona que
+ * se está usando: una matriz congelada no deja ver que algo se movió.
  */
 export class ZoneProxies implements Updatable {
+  private static readonly IDLE_STRIDE = 4;
+
   private readonly workshop: SceneProxy;
   private readonly street: SceneProxy;
   private readonly still = new Map<SceneProxy, Object3D[]>();
+  private inUse: SceneProxy | null = null;
 
   /**
-   * Arma las dos versiones unidas (todavía inactivas).
+   * Arma las dos versiones unidas (todavía sin lotes: se arman en la primera parada).
    *
    * @param scene Escena.
    * @param roots Raíces de cada zona.
@@ -38,22 +42,19 @@ export class ZoneProxies implements Updatable {
   }
 
   /**
-   * Activa o desactiva cada versión unida según la parada.
+   * Activa las versiones unidas (la primera vez), vuelve a meter en los lotes lo que quedó quieto y decide qué
+   * zona se está usando.
    *
    * @param stop Parada destino (0 = vista general).
    */
   public switchTo(stop: number): void {
-    const inWorkshop = this.workshopStops.includes(stop);
-    if (inWorkshop) {
-      this.workshop.deactivate();
-    } else {
-      this.workshop.activate();
-    }
-    if (stop === 0 || inWorkshop) {
-      this.street.activate();
-    } else {
-      this.street.deactivate();
-    }
+    this.inUse = this.zoneOf(stop);
+    [this.workshop, this.street].forEach((proxy) => {
+      proxy.setStride(proxy === this.inUse ? 1 : ZoneProxies.IDLE_STRIDE);
+      proxy.activate();
+      proxy.refresh();
+    });
+    this.hold();
   }
 
   /**
@@ -73,11 +74,32 @@ export class ZoneProxies implements Updatable {
    * @returns Versión unida.
    */
   private create(scene: Scene, roots: readonly Object3D[], gate: RenderGate): SceneProxy {
-    const proxy = new SceneProxy(scene, roots, [], gate);
+    const proxy = new SceneProxy(scene, roots, gate);
     proxy.onSettled((still) => {
       this.still.set(proxy, still);
-      this.scheduler.hold([...this.still.values()].flat());
+      this.hold();
     });
     return proxy;
+  }
+
+  /**
+   * Zona que se usa en una parada.
+   *
+   * @param stop Parada (0 = vista general, donde no se usa ninguna).
+   * @returns Versión unida de la zona o `null`.
+   */
+  private zoneOf(stop: number): SceneProxy | null {
+    if (stop === 0) {
+      return null;
+    }
+    return this.workshopStops.includes(stop) ? this.workshop : this.street;
+  }
+
+  /**
+   * Congela las matrices de las piezas quietas de las zonas que no se están usando.
+   */
+  private hold(): void {
+    const held = [...this.still].filter(([proxy]) => proxy !== this.inUse).flatMap(([, still]) => still);
+    this.scheduler.hold(held);
   }
 }

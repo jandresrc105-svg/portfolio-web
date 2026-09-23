@@ -1,13 +1,13 @@
 import type { Object3D } from 'three';
+import { RenderLayer } from './RenderLayer';
 
 /**
  * Compuerta de la capa de la cámara (la 0): varias razones pueden sacar un objeto del render (un detalle
  * diminuto, una pieza reemplazada por su versión unida) y vuelve a dibujarse solo cuando ya no queda ninguna.
  * Usar capas en vez de `visible` no pisa la visibilidad que maneja cada pieza, y las luces no se ven afectadas.
+ * Lo que saca pasa a la capa {@link RenderLayer.Gated}, que el puntero sigue probando.
  */
 export class RenderGate {
-  private static readonly CAMERA_LAYER = 0;
-
   private readonly reasons = new Map<Object3D, Set<string>>();
 
   /**
@@ -20,7 +20,8 @@ export class RenderGate {
     const set = this.reasons.get(object) ?? new Set<string>();
     set.add(reason);
     this.reasons.set(object, set);
-    object.layers.disable(RenderGate.CAMERA_LAYER);
+    object.layers.disable(RenderLayer.Default);
+    object.layers.enable(RenderLayer.Gated);
   }
 
   /**
@@ -37,7 +38,8 @@ export class RenderGate {
     set.delete(reason);
     if (set.size === 0) {
       this.reasons.delete(object);
-      object.layers.enable(RenderGate.CAMERA_LAYER);
+      object.layers.disable(RenderLayer.Gated);
+      object.layers.enable(RenderLayer.Default);
     }
   }
 }

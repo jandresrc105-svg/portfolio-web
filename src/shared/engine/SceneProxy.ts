@@ -11,23 +11,25 @@ import type { RenderGate } from './RenderGate';
 import type { Updatable } from './Updatable';
 
 /**
- * Versión unida de una zona de la escena (patrón Proxy): mientras la zona se ve de lejos y nadie la usa, sus
- * mallas originales dejan de dibujarse y en su lugar se dibujan unos pocos lotes con las mismas geometrías,
- * en el mismo lugar y con los mismos materiales. Las piezas originales siguen vivas (se animan, sus luces
- * iluminan) y cada frame los lotes copian sus colores y brillos, así un LED que parpadea o una luz que se
- * enciende se ven igual. Lo que no se puede unir sin cambiar el resultado (transparencias, shaders propios,
- * instancias, lo que se refleja en los charcos) y lo que se mueve (`keep`) sigue dibujándose como siempre.
+ * Versión unida de una zona de la escena (patrón Proxy): sus mallas originales dejan de dibujarse y en su
+ * lugar se dibujan unos pocos lotes con las mismas geometrías, en el mismo lugar y con los mismos materiales.
+ * Las piezas originales siguen vivas (se animan, sus luces iluminan) y cada frame los lotes copian sus colores y
+ * brillos, así un LED que parpadea o una luz que se enciende se ven igual.
  *
- * Al activarse revisa si algo cambió desde la última vez y rearma solo los grupos afectados (los demás se
- * reutilizan). Durante sus primeros segundos vigila la zona: lo que se mueve solo (un servo) pasa a dibujarse
- * como original, y cuando todo está quieto avisa qué piezas pueden dejar de recalcular sus matrices
- * ({@link SceneProxy.onSettled}). Los subárboles que cubre por completo se ocultan enteros para que three.js ni
- * los recorra.
+ * Cada frame revisa además si alguna malla copiada se movió, se ocultó, cambió de material o redibujó su
+ * textura: esa malla se apaga en su lote y vuelve a dibujarse como original en el mismo frame (o el siguiente,
+ * si fue un movimiento), así lo que el visitante toca o lo que se anima nunca se ve congelado. Al cambiar de
+ * parada ({@link SceneProxy.refresh}) se rearman solo los grupos donde algo cambió; lo que se mueve una y otra
+ * vez (un servo) queda como original para siempre. Lo que no se puede unir sin cambiar el resultado
+ * (transparencias, shaders propios, instancias, lo que se refleja en los charcos) se dibuja siempre como
+ * original. Los subárboles que cubre por completo se ocultan enteros para que three.js ni los recorra, y avisa
+ * qué piezas quedaron quietas ({@link SceneProxy.onSettled}) para congelar sus matrices.
  */
 export class SceneProxy implements Updatable {
   private static readonly REASON = 'proxy';
   private static readonly CHECK_EVERY = 30;
   private static readonly QUIET_CHECKS = 3;
+  private static readonly RESTLESS_DROPS = 2;
 
   private readonly group = new Group();
   private readonly keys = new ProxyKey();
@@ -35,26 +37,29 @@ export class SceneProxy implements Updatable {
   private readonly cover = new ProxyCover();
   private readonly watch = new ProxyWatch();
   private readonly moving = new Set<Object3D>();
+  private readonly drops = new Map<Mesh, number>();
   private readonly dropped = new Set<Mesh>();
+  private readonly changed: Mesh[] = [];
   private readonly settledListeners: ((still: Object3D[]) => void)[] = [];
   private groups = new Map<string, ProxyGroup>();
+  private sources: ProxySource[] = [];
+  private batches: ProxyBatch[] = [];
   private active = false;
   private built = false;
   private frame = 0;
   private quiet = 0;
+  private stride = 1;
 
   /**
    * Prepara la versión unida (sin armarla todavía).
    *
    * @param scene Escena donde se dibujan los lotes.
    * @param roots Raíces de las piezas de la zona.
-   * @param keep Nodos que siempre se dibujan como originales (partes que se mueven).
    * @param gate Compuerta de la capa de la cámara.
    */
   public constructor(
     scene: Scene,
     private readonly roots: readonly Object3D[],
-    private readonly keep: readonly Object3D[],
     private readonly gate: RenderGate,
   ) {
     this.group.name = 'SceneProxy';
@@ -65,12 +70,22 @@ export class SceneProxy implements Updatable {
 
   /**
    * Avisa cuando la zona quedó quieta (con las piezas que pueden dejar de recalcular matrices) y cuando la
-   * versión unida se desactiva (con una lista vacía).
+   * versión unida se desactiva o se rearma (con una lista vacía).
    *
    * @param listener Recibe las raíces quietas.
    */
   public onSettled(listener: (still: Object3D[]) => void): void {
     this.settledListeners.push(listener);
+  }
+
+  /**
+   * Cada cuántos frames se revisa cada malla: 1 en la zona que se está usando (lo que se toca responde en el
+   * mismo frame) y más en las demás, donde casi nada cambia y basta con repartir la revisión.
+   *
+   * @param frames Frames entre revisiones de una misma malla.
+   */
+  public setStride(frames: number): void {
+    this.stride = Math.max(1, Math.floor(frames));
   }
 
   /**
@@ -80,14 +95,13 @@ export class SceneProxy implements Updatable {
     if (this.active) {
       return;
     }
-    if (!this.built || this.changed().length > 0) {
+    if (!this.built || this.hasChanges()) {
       this.rebuild();
     }
     this.conceal();
     this.group.visible = true;
     this.active = true;
-    this.quiet = 0;
-    this.watch.start(this.roots);
+    this.restartWatch();
   }
 
   /**
@@ -104,19 +118,33 @@ export class SceneProxy implements Updatable {
   }
 
   /**
+   * Vuelve a meter en los lotes lo que se sacó porque cambió (si ya está quieto), rearmando solo esos grupos.
+   */
+  public refresh(): void {
+    if (!this.active || (this.dropped.size === 0 && !this.hasChanges())) {
+      return;
+    }
+    this.reveal();
+    this.rebuild();
+    this.conceal();
+    this.restartWatch();
+  }
+
+  /**
    * @inheritdoc
    */
   public update(): void {
     if (!this.active) {
       return;
     }
-    this.frame += 1;
-    if (this.quiet < SceneProxy.QUIET_CHECKS && this.frame % SceneProxy.CHECK_EVERY === 0) {
-      this.learn();
-    }
-    this.batches().forEach((batch) => {
+    this.detect();
+    this.batches.forEach((batch) => {
       batch.sync();
     });
+    this.frame += 1;
+    if (this.quiet < SceneProxy.QUIET_CHECKS && this.frame % SceneProxy.CHECK_EVERY === 0) {
+      this.settle();
+    }
   }
 
   /**
@@ -132,38 +160,62 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Revisa la zona durante los primeros segundos: lo que cambió solo se mueve de verdad y pasa a dibujarse
-   * como original; tras varias revisiones sin movimiento, avisa que la zona está quieta.
+   * Saca de los lotes lo que cambió desde que se copió (revisa la parte de las mallas que toca en este frame).
    */
-  private learn(): void {
-    const changed = this.changed();
-    const moved = this.watch.check();
+  private detect(): void {
+    const { sources, stride, changed } = this;
+    for (let index = this.frame % stride; index < sources.length; index += stride) {
+      const source = sources[index];
+      if (source && !this.dropped.has(source.mesh) && this.differs(source)) {
+        changed.push(source.mesh);
+      }
+    }
     if (changed.length > 0) {
       this.drop(changed);
+      changed.length = 0;
     }
-    this.quiet = moved || changed.length > 0 ? 0 : this.quiet + 1;
+  }
+
+  /**
+   * Cuenta revisiones sin movimiento en la zona y, tras varias, avisa qué piezas quedaron quietas.
+   */
+  private settle(): void {
+    this.quiet = this.watch.check() ? 0 : this.quiet + 1;
     if (this.quiet === SceneProxy.QUIET_CHECKS) {
       this.notify(this.watch.still(this.roots));
     }
   }
 
   /**
-   * Saca de los lotes (sin rearmarlos) mallas que se mueven: se apagan sus vértices y vuelven a dibujarse como
-   * originales. En el siguiente rearmado ya no entran.
+   * Vuelve a vigilar la zona desde cero (después de activarla o rearmarla).
+   */
+  private restartWatch(): void {
+    this.quiet = 0;
+    this.watch.start(this.roots);
+    this.notify([]);
+  }
+
+  /**
+   * Saca de los lotes (sin rearmarlos) mallas que cambiaron: se apagan sus vértices y vuelven a dibujarse como
+   * originales. La que cambia una y otra vez ya no vuelve a entrar.
    *
-   * @param meshes Mallas que se movieron.
+   * @param meshes Mallas que cambiaron.
    */
   private drop(meshes: readonly Mesh[]): void {
     this.cover.show();
     meshes.forEach((mesh) => {
-      this.moving.add(mesh);
+      const drops = (this.drops.get(mesh) ?? 0) + 1;
+      this.drops.set(mesh, drops);
+      if (drops >= SceneProxy.RESTLESS_DROPS) {
+        this.moving.add(mesh);
+      }
       this.dropped.add(mesh);
-      this.batches().forEach((batch) => {
+      this.batches.forEach((batch) => {
         batch.drop(mesh);
       });
       this.gate.show(mesh, SceneProxy.REASON);
     });
-    this.cover.compute(this.roots, new Set(this.live().map(({ mesh }) => mesh)));
+    this.cover.compute(this.roots, this.proxied());
     this.cover.hide();
   }
 
@@ -192,13 +244,16 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Pone en la escena los lotes vigentes y calcula qué subárboles cubren.
+   * Pone en la escena los lotes vigentes, guarda las listas de lotes y mallas, y calcula qué subárboles cubren.
    */
   private mount(): void {
+    const groups = [...this.groups.values()];
+    this.batches = groups.flatMap((group) => group.batches);
+    this.sources = groups.flatMap((group) => group.sources);
     this.dropped.clear();
     this.group.clear();
-    this.batches().forEach((batch) => this.group.add(batch.mesh));
-    this.cover.compute(this.roots, new Set(this.sources().map(({ mesh }) => mesh)));
+    this.batches.forEach((batch) => this.group.add(batch.mesh));
+    this.cover.compute(this.roots, this.proxied());
     this.built = true;
   }
 
@@ -212,7 +267,7 @@ export class SceneProxy implements Updatable {
   private reusable(group: ProxyGroup, meshes: readonly Mesh[]): boolean {
     const same =
       group.meshes.length === meshes.length && group.meshes.every((mesh, index) => mesh === meshes[index]);
-    return same && group.sources.every((source) => !this.differs(source));
+    return same && group.sources.every((source) => !this.dropped.has(source.mesh) && !this.differs(source));
   }
 
   /**
@@ -222,9 +277,8 @@ export class SceneProxy implements Updatable {
    */
   private collect(): Map<string, { kind: ProxyKind; meshes: Mesh[] }> {
     const groups = new Map<string, { kind: ProxyKind; meshes: Mesh[] }>();
-    const keep = new Set(this.keep);
     const visit = (node: Object3D): void => {
-      if (!node.visible || keep.has(node) || this.moving.has(node)) {
+      if (!node.visible || this.moving.has(node)) {
         return;
       }
       if (node instanceof Mesh) {
@@ -254,42 +308,21 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Lotes de todos los grupos.
+   * Mallas que se dibujan desde los lotes ahora (sin las apagadas).
    *
-   * @returns Lotes.
+   * @returns Mallas.
    */
-  private batches(): ProxyBatch[] {
-    return [...this.groups.values()].flatMap((group) => group.batches);
+  private proxied(): Set<Object3D> {
+    return new Set(this.sources.filter(({ mesh }) => !this.dropped.has(mesh)).map(({ mesh }) => mesh));
   }
 
   /**
-   * Mallas originales en los lotes, con su estado copiado.
+   * Si alguna malla copiada (sin contar las ya apagadas) cambió.
    *
-   * @returns Estados copiados.
+   * @returns `true` si hay cambios.
    */
-  private sources(): ProxySource[] {
-    return [...this.groups.values()].flatMap((group) => group.sources);
-  }
-
-  /**
-   * Mallas originales que siguen dibujándose desde los lotes (sin las que se apagaron por moverse).
-   *
-   * @returns Estados copiados.
-   */
-  private live(): ProxySource[] {
-    return this.sources().filter(({ mesh }) => !this.dropped.has(mesh));
-  }
-
-  /**
-   * Mallas originales que se movieron, se ocultaron o cambiaron de material o de textura desde que se armaron
-   * sus lotes.
-   *
-   * @returns Mallas que cambiaron.
-   */
-  private changed(): Mesh[] {
-    return this.live()
-      .filter((source) => this.differs(source))
-      .map(({ mesh }) => mesh);
+  private hasChanges(): boolean {
+    return this.sources.some((source) => !this.dropped.has(source.mesh) && this.differs(source));
   }
 
   /**
@@ -306,15 +339,17 @@ export class SceneProxy implements Updatable {
       return true;
     }
     const hid = mesh.visible !== visible && !this.cover.hides(mesh);
-    return !mesh.matrixWorld.equals(matrix) || hid;
+    return hid || !mesh.matrixWorld.equals(matrix);
   }
 
   /**
-   * Saca del render las mallas originales (y oculta los subárboles que los lotes cubren por completo).
+   * Saca del render las mallas originales que están en los lotes (y oculta los subárboles cubiertos).
    */
   private conceal(): void {
-    this.live().forEach(({ mesh }) => {
-      this.gate.hide(mesh, SceneProxy.REASON);
+    this.sources.forEach(({ mesh }) => {
+      if (!this.dropped.has(mesh)) {
+        this.gate.hide(mesh, SceneProxy.REASON);
+      }
     });
     this.cover.hide();
   }
@@ -324,7 +359,7 @@ export class SceneProxy implements Updatable {
    */
   private reveal(): void {
     this.cover.show();
-    this.sources().forEach(({ mesh }) => {
+    this.sources.forEach(({ mesh }) => {
       this.gate.show(mesh, SceneProxy.REASON);
     });
   }
@@ -332,7 +367,7 @@ export class SceneProxy implements Updatable {
   /**
    * Avisa a quien escuche qué piezas están quietas.
    *
-   * @param still Raíces quietas (vacío al desactivarse).
+   * @param still Raíces quietas (vacío mientras se vigila de nuevo).
    */
   private notify(still: Object3D[]): void {
     this.settledListeners.forEach((listener) => {

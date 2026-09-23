@@ -1,12 +1,21 @@
 import { Raycaster, Vector2, type Camera, type Intersection, type Object3D } from 'three';
+import { RenderLayer } from './RenderLayer';
 
 /**
- * Detecta qué objeto registrado está bajo el puntero (raycasting) y devuelve su carga asociada.
+ * Detecta qué objeto registrado está bajo el puntero (raycasting) y devuelve su carga asociada. También prueba
+ * lo que se dibuja desde un lote ({@link RenderLayer.Gated}): en pantalla está ahí.
  */
 export class PointerPicker<TPayload> {
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
   private readonly targets = new Map<Object3D, TPayload>();
+
+  /**
+   * Prepara el detector.
+   */
+  public constructor() {
+    this.raycaster.layers.enable(RenderLayer.Gated);
+  }
 
   /**
    * Registra un objeto seleccionable.
