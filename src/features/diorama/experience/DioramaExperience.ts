@@ -5,6 +5,7 @@ import { SeededRandom } from '@shared/core/math/SeededRandom';
 import { AdaptiveResolution } from '@shared/engine/AdaptiveResolution';
 import { DetailCuller } from '@shared/engine/DetailCuller';
 import { LightZones } from '@shared/engine/LightZones';
+import { RenderGate } from '@shared/engine/RenderGate';
 import { PointerPicker } from '@shared/engine/PointerPicker';
 import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
@@ -29,6 +30,7 @@ import { NeonEnvironment } from '../scene/NeonEnvironment';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
 import { BenchInteraction } from './BenchInteraction';
 import { WorkshopInteraction } from './WorkshopInteraction';
+import { ZoneProxies } from './ZoneProxies';
 import { PanelInteraction } from './PanelInteraction';
 import { PhoneInteraction } from './PhoneInteraction';
 
@@ -53,6 +55,8 @@ export class DioramaExperience {
   private readonly resolution: AdaptiveResolution;
   private readonly scheduler: UpdateScheduler;
   private readonly culler: DetailCuller;
+  private readonly gate = new RenderGate();
+  private proxy: ZoneProxies | null = null;
   private lights: LightZones | null = null;
   private lightsCall: gsap.core.Tween | null = null;
   private lastStop = 0;
@@ -94,7 +98,7 @@ export class DioramaExperience {
     this.director = new CameraDirector(this.stage.camera, canvas);
     this.resolution = new AdaptiveResolution(this.stage, quality, () => this.loop.resting);
     this.scheduler = new UpdateScheduler(this.stage.camera);
-    this.culler = new DetailCuller(this.stage.camera);
+    this.culler = new DetailCuller(this.stage.camera, this.gate);
     this.loop = new RenderLoop(this.stage.renderer, this.stage.render.bind(this.stage));
   }
 
@@ -167,6 +171,7 @@ export class DioramaExperience {
     this.stop = stop;
     this.director.travelTo(stop);
     this.diorama.vending?.setFocused(stop === this.diorama.showcaseStop);
+    this.proxy?.switchTo(stop);
     this.switchLights(stop);
     this.stations.forEach((station) => {
       station.device.setActive(station.stops.includes(stop));
@@ -491,10 +496,24 @@ export class DioramaExperience {
       this.culler.track(root);
     });
     this.loop.add(this.director, this.resolution, this.sound, this.devices.phone, ...this.diorama.updatables);
-    this.loop.add(this.scheduler, this.culler);
+    this.proxy = this.createProxies();
+    this.loop.add(this.scheduler, this.culler, this.proxy);
     this.director.onMotion(() => {
       this.loop.wake();
     });
+  }
+
+  /**
+   * Versiones unidas del taller y de la calle, ya en el estado de la parada actual.
+   *
+   * @returns Versiones unidas por zona.
+   */
+  private createProxies(): ZoneProxies {
+    const roots = { workshop: this.diorama.workshopRoots, street: this.diorama.streetProxyRoots };
+    const { scene } = this.stage;
+    const proxies = new ZoneProxies(scene, roots, this.gate, this.scheduler, this.diorama.workshopStops);
+    proxies.switchTo(this.stop);
+    return proxies;
   }
 
   /**

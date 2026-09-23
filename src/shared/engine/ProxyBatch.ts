@@ -1,0 +1,204 @@
+import {
+  BufferAttribute,
+  Mesh,
+  MeshStandardMaterial,
+  type BufferGeometry,
+  type Material,
+  type MeshBasicMaterial,
+} from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import type { ProxyEntry } from './ProxyEntry';
+import type { ProxyKind } from './ProxyKind';
+import { ProxyShader } from './ProxyShader';
+
+/**
+ * Un lote de la versión unida de una zona: las mallas originales que comparten clave, llevadas a su posición
+ * en el mundo y unidas en una sola malla. Cada material original tiene sus rangos de vértices; en cada
+ * {@link ProxyBatch.sync} se comparan sus valores actuales (color, brillo, rugosidad, metal) con los copiados y,
+ * si alguno cambió (un LED que parpadea, una luz que se enciende), se reescriben solo esos vértices.
+ */
+export class ProxyBatch {
+  private static readonly LIT_STRIDE = 8;
+  private static readonly BASIC_STRIDE = 3;
+  private static readonly RGB = 3;
+  private static readonly PAIR = 2;
+
+  public readonly mesh: Mesh;
+
+  private readonly entries: ProxyEntry[];
+  private readonly current: Float32Array;
+
+  /**
+   * Arma el lote.
+   *
+   * @param kind Tipo de lote.
+   * @param sources Mallas originales (misma clave), con sus matrices del mundo al día.
+   */
+  public constructor(
+    private readonly kind: ProxyKind,
+    sources: readonly Mesh[],
+  ) {
+    this.current = new Float32Array(kind === 'lit' ? ProxyBatch.LIT_STRIDE : ProxyBatch.BASIC_STRIDE);
+    this.entries = ProxyBatch.group(sources, this.current.length);
+    this.mesh = new Mesh(this.geometry(sources), ProxyBatch.material(kind, sources));
+    this.mesh.matrixAutoUpdate = false;
+    this.mesh.matrixWorldAutoUpdate = false;
+    this.sync(true);
+  }
+
+  /**
+   * Copia a los vértices los valores de los materiales originales que cambiaron.
+   *
+   * @param force Reescribir todo aunque no haya cambios.
+   */
+  public sync(force = false): void {
+    this.entries.forEach((entry) => {
+      this.read(entry.material);
+      if (!force && this.current.every((value, index) => value === entry.last[index])) {
+        return;
+      }
+      entry.last.set(this.current);
+      entry.ranges.forEach(({ start, count }) => {
+        this.write(start, count);
+      });
+    });
+  }
+
+  /**
+   * Libera la geometría y el material del lote.
+   */
+  public dispose(): void {
+    this.mesh.geometry.dispose();
+    (this.mesh.material as Material).dispose();
+  }
+
+  /**
+   * Lleva cada geometría al mundo, le agrega los atributos por vértice y las une.
+   *
+   * @param sources Mallas originales.
+   * @returns Geometría unida.
+   * @throws {Error} Si las geometrías no se pueden unir (atributos incompatibles).
+   */
+  private geometry(sources: readonly Mesh[]): BufferGeometry {
+    const parts = sources.map((mesh) => this.part(mesh));
+    const merged = mergeGeometries(parts) as BufferGeometry | null;
+    parts.forEach((part) => {
+      part.dispose();
+    });
+    if (!merged) {
+      throw new Error('ProxyBatch: geometrías incompatibles en un mismo lote');
+    }
+    return merged;
+  }
+
+  /**
+   * Copia de la geometría de una malla en el mundo, con los atributos por vértice (vacíos) del lote.
+   *
+   * @param mesh Malla original.
+   * @returns Geometría lista para unir.
+   */
+  private part(mesh: Mesh): BufferGeometry {
+    const part = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    const count = part.getAttribute('position').count;
+    const attribute = (size: number): BufferAttribute =>
+      new BufferAttribute(new Float32Array(count * size), size);
+    part.setAttribute('color', attribute(ProxyBatch.RGB));
+    if (this.kind === 'lit') {
+      part.setAttribute('proxyEmissive', attribute(ProxyBatch.RGB));
+      part.setAttribute('proxyRoughMetal', attribute(ProxyBatch.PAIR));
+    }
+    return part;
+  }
+
+  /**
+   * Lee los valores actuales de un material original.
+   *
+   * @param material Material original.
+   */
+  private read(material: Material): void {
+    const values = this.current;
+    if (material instanceof MeshStandardMaterial) {
+      const { color, emissive, emissiveIntensity, roughness, metalness } = material;
+      values.set([color.r, color.g, color.b, emissive.r * emissiveIntensity, emissive.g * emissiveIntensity]);
+      values.set([emissive.b * emissiveIntensity, roughness, metalness], ProxyBatch.RGB + ProxyBatch.PAIR);
+      return;
+    }
+    const { color } = material as MeshBasicMaterial;
+    values.set([color.r, color.g, color.b]);
+  }
+
+  /**
+   * Escribe los valores leídos en un rango de vértices y marca solo ese tramo para subirlo a la GPU.
+   *
+   * @param start Primer vértice.
+   * @param count Cantidad de vértices.
+   */
+  private write(start: number, count: number): void {
+    const values = this.current;
+    this.fill('color', start, count, values.subarray(0, ProxyBatch.RGB));
+    if (this.kind === 'lit') {
+      this.fill(
+        'proxyEmissive',
+        start,
+        count,
+        values.subarray(ProxyBatch.RGB, ProxyBatch.RGB * ProxyBatch.PAIR),
+      );
+      this.fill('proxyRoughMetal', start, count, values.subarray(ProxyBatch.RGB * ProxyBatch.PAIR));
+    }
+  }
+
+  /**
+   * Repite un valor en todos los vértices de un rango de un atributo.
+   *
+   * @param name Atributo.
+   * @param start Primer vértice.
+   * @param count Cantidad de vértices.
+   * @param value Valor (un elemento del atributo).
+   */
+  private fill(name: string, start: number, count: number, value: Float32Array): void {
+    const attribute = this.mesh.geometry.getAttribute(name) as BufferAttribute;
+    const size = attribute.itemSize;
+    const array = attribute.array as Float32Array;
+    for (let vertex = start; vertex < start + count; vertex += 1) {
+      array.set(value, vertex * size);
+    }
+    attribute.addUpdateRange(start * size, count * size);
+    attribute.needsUpdate = true;
+  }
+
+  /**
+   * Agrupa las mallas por material, con el rango de vértices que ocupa cada una en la geometría unida.
+   *
+   * @param sources Mallas originales, en el orden en que se unen.
+   * @param stride Cantidad de valores copiados por material.
+   * @returns Entradas por material.
+   */
+  private static group(sources: readonly Mesh[], stride: number): ProxyEntry[] {
+    const entries = new Map<Material, ProxyEntry>();
+    let start = 0;
+    sources.forEach((mesh) => {
+      const material = mesh.material as Material;
+      const entry = entries.get(material) ?? { material, ranges: [], last: new Float32Array(stride) };
+      const count = mesh.geometry.getAttribute('position').count;
+      entry.ranges.push({ start, count });
+      entries.set(material, entry);
+      start += count;
+    });
+    return [...entries.values()];
+  }
+
+  /**
+   * Material del lote, copiado del primer material del grupo.
+   *
+   * @param kind Tipo de lote.
+   * @param sources Mallas originales.
+   * @returns Material del lote.
+   */
+  private static material(kind: ProxyKind, sources: readonly Mesh[]): Material {
+    const template = sources[0]?.material as Material;
+    const shader = new ProxyShader();
+    return kind === 'lit'
+      ? shader.lit(template as MeshStandardMaterial)
+      : shader.basic(template as MeshBasicMaterial);
+  }
+}

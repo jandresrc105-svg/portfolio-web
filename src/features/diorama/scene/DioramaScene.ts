@@ -261,6 +261,17 @@ export class DioramaScene {
   }
 
   /**
+   * Raíces de la calle que se pueden reemplazar por su versión unida: todo menos los marcadores (se tocan
+   * desde la vista general).
+   *
+   * @returns Raíces.
+   */
+  public get streetProxyRoots(): Object3D[] {
+    const markers = new Set<Object3D>(this.markers.map((marker) => marker.root));
+    return this.streetRoots.filter((root) => !markers.has(root));
+  }
+
+  /**
    * Raíces 3D de todas las piezas del diorama.
    *
    * @returns Raíces.

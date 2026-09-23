@@ -39,6 +39,17 @@ export class UpdateScheduler implements Updatable {
   }
 
   /**
+   * Congela las matrices de estas piezas y libera las de las demás.
+   *
+   * @param roots Raíces de las piezas a congelar (vacío para liberar todas).
+   */
+  public hold(roots: readonly Object3D[]): void {
+    this.pieces.forEach((piece) => {
+      piece.setHeld(roots.some((root) => piece.owns(root)));
+    });
+  }
+
+  /**
    * @inheritdoc
    */
   public update(delta: number, elapsed: number): void {

@@ -1,0 +1,17 @@
+import type { Material, Matrix4, Mesh, Texture } from 'three';
+
+/**
+ * Malla original que está en un lote de la versión unida, con el estado que tenía cuando se copió.
+ */
+export interface ProxySource {
+  /** Malla original. */
+  readonly mesh: Mesh;
+  /** Matriz del mundo al copiarla. */
+  readonly matrix: Matrix4;
+  /** Material al copiarla. */
+  readonly material: Material;
+  /** Textura de color al copiarla. */
+  readonly map: Texture | null;
+  /** Visibilidad al copiarla. */
+  readonly visible: boolean;
+}

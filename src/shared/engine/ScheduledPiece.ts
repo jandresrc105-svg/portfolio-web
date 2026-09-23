@@ -14,6 +14,7 @@ export class ScheduledPiece {
   private sphere: Sphere | null = null;
   private pending = 0;
   private detailed: boolean | null = null;
+  private held = false;
 
   /**
    * Prepara la pieza.
@@ -42,6 +43,26 @@ export class ScheduledPiece {
   }
 
   /**
+   * Si la raíz de esta pieza es la indicada.
+   *
+   * @param root Raíz.
+   * @returns `true` si es la suya.
+   */
+  public owns(root: Object3D): boolean {
+    return this.root === root;
+  }
+
+  /**
+   * Congela las matrices de la pieza (no se dibuja su original, así que no hace falta recalcularlas); su lógica
+   * sigue corriendo.
+   *
+   * @param held `true` para congelar.
+   */
+  public setHeld(held: boolean): void {
+    this.held = held;
+  }
+
+  /**
    * Avisa a la pieza (si le interesa) si se ve con detalle, solo cuando cambia.
    *
    * @param detailed `true` si se ve grande en pantalla.
@@ -63,7 +84,7 @@ export class ScheduledPiece {
    * @param elapsed Segundos desde el inicio.
    */
   public run(delta: number, elapsed: number): void {
-    this.root.matrixWorldAutoUpdate = true;
+    this.root.matrixWorldAutoUpdate = !this.held;
     this.updatable.update(Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
   }
@@ -83,7 +104,9 @@ export class ScheduledPiece {
     }
     this.updatable.update(Math.min(this.pending, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
-    this.root.updateMatrixWorld(true);
+    if (!this.held) {
+      this.root.updateMatrixWorld(true);
+    }
   }
 
   /**
