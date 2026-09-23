@@ -1,4 +1,4 @@
-import { BoxGeometry, CylinderGeometry, Group } from 'three';
+import { BoxGeometry, CylinderGeometry, Group, type Object3D } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { ToolId } from '../../models/ToolId';
 import type { ToolBounds } from '../../models/ToolBounds';
@@ -59,6 +59,13 @@ export class DesolderPump extends WallTool {
     const { y, height } = DesolderPump.span();
     const { width, round } = DesolderPump.SHADOW;
     return [{ x: 0, y, width, height, round }];
+  }
+
+  /**
+   * @inheritdoc
+   */
+  protected override moving(): Object3D[] {
+    return [this.plunger];
   }
 
   /**

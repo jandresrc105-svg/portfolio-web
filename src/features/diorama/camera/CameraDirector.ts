@@ -43,6 +43,7 @@ export class CameraDirector implements Updatable {
   private tween: gsap.core.Tween | null = null;
   private stop = 0;
   private settled = false;
+  private motion: (() => void) | null = null;
 
   /**
    * Crea la cámara y sus controles (desactivados hasta que termine la intro).
@@ -133,6 +134,16 @@ export class CameraDirector implements Updatable {
   }
 
   /**
+   * Avisa cada vez que la cámara se mueve (arrastre, rueda, inercia o viaje).
+   *
+   * @param listener Se llama en cada movimiento.
+   */
+  public onMotion(listener: () => void): void {
+    this.controls.addEventListener('change', listener);
+    this.motion = listener;
+  }
+
+  /**
    * Libera los controles y cancela cualquier viaje en curso.
    */
   public dispose(): void {
@@ -182,6 +193,7 @@ export class CameraDirector implements Updatable {
     this.camera.position.y += Math.sin(t * Math.PI) * arc;
     this.controls.target.lerpVectors(this.from.target, this.to.target, t);
     this.camera.lookAt(this.controls.target);
+    this.motion?.();
   }
 
   /**

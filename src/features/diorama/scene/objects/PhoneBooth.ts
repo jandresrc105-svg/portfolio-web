@@ -58,6 +58,7 @@ export class PhoneBooth extends SceneObject implements Updatable, Powerable {
 
   private readonly art: PhoneBoothArt;
   private readonly phone: PayPhone;
+  private handset: Object3D | null = null;
   private readonly sign = new MeshBasicMaterial({ toneMapped: false });
   private readonly tube = new MeshBasicMaterial({ color: PhoneBooth.TUBE.color });
   private readonly light = new PointLight(PhoneBooth.LIGHT.color, 0, PhoneBooth.LIGHT.distance, 2);
@@ -184,6 +185,7 @@ export class PhoneBooth extends SceneObject implements Updatable, Powerable {
     this.buildInterior();
     this.root.position.copy(PhoneBooth.POSITION);
     this.root.rotation.y = PhoneBooth.ROTATION_Y;
+    this.settle(...(this.handset ? [this.handset] : []));
     this.setPower(0);
   }
 
@@ -262,7 +264,11 @@ export class PhoneBooth extends SceneObject implements Updatable, Powerable {
     tube.rotation.z = Math.PI / 2;
     this.add(this.light, { x: 0, y: PhoneBooth.LIGHT.y, z: PhoneBooth.LIGHT.z });
     const back = -PhoneBooth.SIZE.depth / 2;
-    this.add(this.phone.build(), { x: 0, y: PhoneBooth.PHONE.y, z: back + PhoneBooth.PHONE.inset });
+    this.handset = this.add(this.phone.build(), {
+      x: 0,
+      y: PhoneBooth.PHONE.y,
+      z: back + PhoneBooth.PHONE.inset,
+    });
     this.buildShelf(back);
   }
 

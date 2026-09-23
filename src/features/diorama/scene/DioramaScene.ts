@@ -1,8 +1,7 @@
-import type { Scene, Vector3Like } from 'three';
+import type { Object3D, Scene, Vector3Like } from 'three';
 import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
-import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { Hotspot } from '../models/Hotspot';
@@ -19,6 +18,7 @@ import { WorkbenchService } from '../services/WorkbenchService';
 import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from './CanvasTextureFactory';
 import { PowerGrid } from './PowerGrid';
+import { RenderTuning } from './RenderTuning';
 import { PowerGroup } from './PowerGroup';
 import { Storm } from './Storm';
 import type { MaterialLibrary } from './MaterialLibrary';
@@ -125,6 +125,7 @@ export class DioramaScene {
   };
 
   public readonly updatables: Updatable[] = [];
+  public readonly pieces: (SceneObject & Updatable)[] = [];
   public readonly powerSteps: PowerStep[] = [];
   public readonly markers: HotspotMarker[] = [];
   public storm: Storm | null = null;
@@ -139,6 +140,7 @@ export class DioramaScene {
   public workshopDevices: WorkshopDevice[] = [];
 
   private readonly objects: SceneObject[] = [];
+  private workshopObjects: SceneObject[] = [];
   private readonly workshop = new WorkshopLayout();
   private readonly luminous: SceneObject[] = [];
   private readonly materials: MaterialLibrary;
@@ -239,6 +241,35 @@ export class DioramaScene {
   }
 
   /**
+   * Raíces 3D de las piezas del taller del segundo piso (sus luces forman una zona aparte).
+   *
+   * @returns Raíces.
+   */
+  public get workshopRoots(): Object3D[] {
+    return this.workshopObjects.map((object) => object.root);
+  }
+
+  /**
+   * Raíces 3D de las piezas de la calle (todo lo que no es el taller).
+   *
+   * @returns Raíces.
+   */
+  public get streetRoots(): Object3D[] {
+    return this.objects
+      .filter((object) => !this.workshopObjects.includes(object))
+      .map((object) => object.root);
+  }
+
+  /**
+   * Raíces 3D de todas las piezas del diorama.
+   *
+   * @returns Raíces.
+   */
+  public get roots(): Object3D[] {
+    return this.objects.map((object) => object.root);
+  }
+
+  /**
    * Construye todas las piezas dentro de la escena.
    *
    * @param scene Escena destino.
@@ -253,9 +284,7 @@ export class DioramaScene {
     this.buildMarkers();
     this.updatables.push(this.grid);
     this.objects.forEach((object) => scene.add(object.create()));
-    this.luminous.forEach((object) => {
-      object.enableLayer(RenderLayer.Reflected);
-    });
+    new RenderTuning().apply(scene, this.objects, this.pieces, this.luminous);
   }
 
   /**
@@ -431,6 +460,18 @@ export class DioramaScene {
    * letrero, el banco de pruebas de los proyectos y el osciloscopio con la placa del PID.
    */
   private buildWorkshop(): void {
+    const first = this.objects.length;
+    this.buildShop();
+    this.buildLab();
+    this.buildDevices();
+    this.buildSolar();
+    this.workshopObjects = this.objects.slice(first);
+  }
+
+  /**
+   * El local del taller: la base sobre el techo, la escalera, el local, su letrero y el banco de los proyectos.
+   */
+  private buildShop(): void {
     const { workshop, workshopSign } = DioramaScene.TIMELINE;
     this.register(new ShopPlinth(this.materials));
     this.register(new ShopStairs());
@@ -443,9 +484,6 @@ export class DioramaScene {
     };
     this.workbench = this.animate(new Workbench(this.materials, this.textures, ids));
     this.power(this.workbench, workshop, PowerMode.Fade);
-    this.buildLab();
-    this.buildDevices();
-    this.buildSolar();
   }
 
   /**
@@ -579,7 +617,7 @@ export class DioramaScene {
    * @returns La misma pieza.
    */
   private animate<T extends SceneObject & Updatable>(object: T): T {
-    this.updatables.push(object);
+    this.pieces.push(object);
     return this.register(object);
   }
 

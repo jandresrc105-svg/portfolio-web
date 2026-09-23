@@ -134,6 +134,7 @@ export class ManekiNeko extends SceneObject implements Updatable {
     this.add(shoulder, ManekiNeko.SHOULDER);
     this.root.position.copy(ManekiNeko.POSITION);
     this.root.rotation.y = ManekiNeko.ROTATION_Y;
+    this.settle(shoulder);
   }
 
   /**

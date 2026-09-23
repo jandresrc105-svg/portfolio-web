@@ -2,10 +2,15 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
+  Frustum,
+  Group,
   Matrix4,
   Mesh,
   ShaderMaterial,
   type Camera,
+  type Material,
+  type Scene,
+  type WebGLRenderer,
   type IUniform,
 } from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
@@ -42,7 +47,13 @@ export class Puddles extends SceneObject implements Updatable {
   private static readonly SURFACE = { base: 0x040409, sky: 0x1a1830, skyFallback: 0x2a2548, opacity: 0.94 };
 
   private readonly time: IUniform<number> = { value: 0 };
+  private readonly lastView = new Matrix4();
+  private readonly drawGroup = new Group();
+  private readonly frustum = new Frustum();
+  private readonly projection = new Matrix4();
   private surface: Mesh | Reflector | null = null;
+  private mirrorRender: Reflector['onBeforeRender'] | null = null;
+  private skip = false;
 
   /**
    * Crea los charcos.
@@ -67,6 +78,36 @@ export class Puddles extends SceneObject implements Updatable {
   public reflectOnly(camera: Camera, layer: number): void {
     if (this.surface instanceof Reflector) {
       this.surface.getReflectionCamera(camera).layers.set(layer);
+    }
+  }
+
+  /**
+   * Dibuja el reflejo antes del render principal (no dentro de él): así three.js usa el mismo estado de luces
+   * en las dos pasadas y los materiales no cambian de variante de shader. Solo se dibuja con los charcos en
+   * cámara; con la cámara en movimiento en cada frame y con la cámara quieta uno sí y otro no (el reflejo de los
+   * neones se ve igual y la escena reflejada se recorre la mitad de las veces).
+   *
+   * @param renderer Renderer.
+   * @param scene Escena.
+   * @param camera Cámara principal (con sus matrices al día).
+   */
+  public reflect(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {
+    const surface = this.surface;
+    if (!this.mirrorRender || !(surface instanceof Reflector) || !this.inView(surface, camera)) {
+      return;
+    }
+    const still = this.lastView.equals(camera.matrixWorld);
+    this.lastView.copy(camera.matrixWorld);
+    this.skip = still && !this.skip;
+    if (!this.skip) {
+      this.mirrorRender(
+        renderer,
+        scene,
+        camera,
+        surface.geometry,
+        surface.material as Material,
+        this.drawGroup,
+      );
     }
   }
 
@@ -182,9 +223,33 @@ export class Puddles extends SceneObject implements Updatable {
     });
     const material = reflector.material as ShaderMaterial;
     material.uniforms.uTime = this.time;
-    material.transparent = true;
-    material.depthWrite = false;
+    Object.assign(material, { transparent: true, depthWrite: false });
+    this.pace(reflector);
     return reflector;
+  }
+
+  /**
+   * Saca el dibujo del espejo del render principal: three.js lo haría en `onBeforeRender`, dentro del render de
+   * la cámara; ahora lo hace {@link Puddles.reflect}.
+   *
+   * @param reflector Espejo de los charcos.
+   */
+  private pace(reflector: Reflector): void {
+    this.mirrorRender = reflector.onBeforeRender.bind(reflector);
+    reflector.onBeforeRender = (): void => undefined;
+  }
+
+  /**
+   * Si los charcos están en el campo de visión de la cámara.
+   *
+   * @param surface Malla de los charcos.
+   * @param camera Cámara principal.
+   * @returns `true` si se ven.
+   */
+  private inView(surface: Reflector, camera: Camera): boolean {
+    this.projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.projection);
+    return this.frustum.intersectsObject(surface);
   }
 
   /**

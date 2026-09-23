@@ -6,6 +6,7 @@ import type { QualityProfile } from './QualityProfile';
 export class QualityDetector {
   private static readonly MIN_DESKTOP_WIDTH = 900;
   private static readonly MIN_CORES = 4;
+  private static readonly MAX_PIXEL_RATIO = 2;
 
   private static readonly HIGH: QualityProfile = {
     tier: 'high',
@@ -45,7 +46,9 @@ export class QualityDetector {
   }
 
   /**
-   * Elige el perfil de calidad para este dispositivo.
+   * Elige el perfil de calidad para este dispositivo. La resolución de las texturas de canvas no pasa de la
+   * densidad máxima a la que se renderiza la escena en esta pantalla: más texeles que píxeles no se ven más
+   * nítidos y solo ocupan memoria (en una pantalla 1x ahorra casi la mitad; en una retina no cambia nada).
    *
    * @returns Perfil de calidad.
    */
@@ -53,7 +56,10 @@ export class QualityDetector {
     const touch = window.matchMedia('(pointer: coarse)').matches;
     const narrow = window.innerWidth < QualityDetector.MIN_DESKTOP_WIDTH;
     const weak = navigator.hardwareConcurrency < QualityDetector.MIN_CORES;
-    return touch || narrow || weak ? QualityDetector.LOW : QualityDetector.HIGH;
+    const profile = touch || narrow || weak ? QualityDetector.LOW : QualityDetector.HIGH;
+    const base = Math.min(window.devicePixelRatio, profile.pixelRatio);
+    const density = Math.min(base * profile.maxResolutionScale, QualityDetector.MAX_PIXEL_RATIO);
+    return { ...profile, textureScale: Math.min(profile.textureScale, Math.max(density, 1)) };
   }
 
   /**

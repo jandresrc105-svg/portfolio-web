@@ -6,6 +6,7 @@ import {
   MeshStandardMaterial,
   PlaneGeometry,
   type CanvasTexture,
+  type Object3D,
 } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { ToolId } from '../../models/ToolId';
@@ -144,6 +145,13 @@ export class DigitalCaliper extends WallTool {
    */
   public outline(): readonly ToolOutline[] {
     return DigitalCaliper.SHADOW;
+  }
+
+  /**
+   * @inheritdoc
+   */
+  protected override moving(): Object3D[] {
+    return [this.slider, this.wheel];
   }
 
   /**

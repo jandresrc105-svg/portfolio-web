@@ -11,6 +11,7 @@ import {
 } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { SceneObject } from '@shared/engine/SceneObject';
+import type { DetailAware } from '@shared/engine/DetailAware';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { RadioSound } from '../../audio/RadioSound';
 import type { Powerable } from '../../models/Powerable';
@@ -33,7 +34,7 @@ import { WorkshopLayout } from './WorkshopLayout';
  * rotor del capacitor y la antena, redibuja la pantalla (12 veces por segundo) y lleva el audio al
  * parlante.
  */
-export class RadioStationPiece extends SceneObject implements Updatable, Powerable {
+export class RadioStationPiece extends SceneObject implements Updatable, Powerable, DetailAware {
   private static readonly RECEIVER = { x: -0.95, z: -0.76 };
   private static readonly MONITOR = {
     x: -0.95,
@@ -76,6 +77,7 @@ export class RadioStationPiece extends SceneObject implements Updatable, Powerab
   private clock = 0;
   private dirty = true;
   private lit = false;
+  private detailed = true;
 
   /**
    * Crea la estación.
@@ -137,6 +139,13 @@ export class RadioStationPiece extends SceneObject implements Updatable, Powerab
   /**
    * @inheritdoc
    */
+  public setDetailed(detailed: boolean): void {
+    this.detailed = detailed;
+  }
+
+  /**
+   * @inheritdoc
+   */
   public update(delta: number, elapsed: number): void {
     this.service.update(delta);
     const state = this.service.state;
@@ -144,7 +153,9 @@ export class RadioStationPiece extends SceneObject implements Updatable, Powerab
     this.board.show(state, this.level, delta);
     this.antenna.show(state, delta);
     this.sound.play(this.service.audio());
-    this.redraw(state, delta, elapsed);
+    if (this.detailed) {
+      this.redraw(state, delta, elapsed);
+    }
   }
 
   /**

@@ -14,6 +14,7 @@ import {
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { SceneObject } from '@shared/engine/SceneObject';
+import type { DetailAware } from '@shared/engine/DetailAware';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { Placement } from '../../models/Placement';
 import type { Powerable } from '../../models/Powerable';
@@ -34,7 +35,7 @@ import { ScopeKnob } from './ScopeKnob';
  * RUN/STOP, SINGLE, AUTO, MENU, canales, ganancias del PID, generador de la referencia y escalas. La
  * pantalla no lleva vidrio ni se ve afectada por el tone mapping, así se lee igual desde cualquier ángulo.
  */
-export class Oscilloscope extends SceneObject implements Updatable, Powerable {
+export class Oscilloscope extends SceneObject implements Updatable, Powerable, DetailAware {
   private static readonly BODY = { width: 0.41, height: 0.21, depth: 0.14, radius: 0.012, lift: 0.012 };
   private static readonly REAR = { width: 0.33, height: 0.16, depth: 0.1, radius: 0.02, overlap: 0.012 };
   private static readonly VENTS = {
@@ -85,6 +86,7 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
   private bootStart: number | null = null;
   private bootPending = false;
   private dirty = true;
+  private detailed = true;
 
   /**
    * Crea el osciloscopio.
@@ -129,12 +131,19 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
   /**
    * @inheritdoc
    */
+  public setDetailed(detailed: boolean): void {
+    this.detailed = detailed;
+  }
+
+  /**
+   * @inheritdoc
+   */
   public update(delta: number, elapsed: number): void {
     this.keys.forEach((key) => {
       key.update(delta);
     });
     this.sinceRefresh += delta;
-    if (this.sinceRefresh < 1 / Oscilloscope.REFRESH_RATE) {
+    if (!this.detailed || this.sinceRefresh < 1 / Oscilloscope.REFRESH_RATE) {
       return;
     }
     this.sinceRefresh = 0;
@@ -190,6 +199,7 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable {
     this.buildConnectors();
     this.root.position.copy(this.placement.position);
     this.root.rotation.y = this.placement.rotationY;
+    this.settle(...this.keys.map((key) => key.hitArea), ...this.dials.map(({ knob }) => knob.group));
     this.setPower(0);
     this.syncKnobs();
     this.subscribe();

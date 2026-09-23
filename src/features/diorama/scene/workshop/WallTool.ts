@@ -11,6 +11,7 @@ import {
   type Texture,
   type Vector3Like,
 } from 'three';
+import { GeometryBatcher } from '@shared/engine/GeometryBatcher';
 import type { ToolBounds } from '../../models/ToolBounds';
 import type { ToolId } from '../../models/ToolId';
 import type { ToolOutline } from '../../models/ToolOutline';
@@ -69,6 +70,8 @@ export abstract class WallTool {
    */
   public build(): Group {
     this.shape();
+    this.body.updateMatrixWorld(true);
+    new GeometryBatcher().batch(this.body, this.moving());
     const { x, y, width, height } = this.bounds();
     const { depth, margin } = WallTool.HIT;
     this.hitArea.scale.set(width + margin, height + margin, depth);
@@ -183,6 +186,16 @@ export abstract class WallTool {
    * @returns Caja.
    */
   protected abstract bounds(): ToolBounds;
+
+  /**
+   * Partes que se mueven dentro de la herramienta (mordazas, émbolo…): no se unen con el resto del cuerpo, que
+   * sí se une en una sola malla por acabado.
+   *
+   * @returns Nodos móviles.
+   */
+  protected moving(): Object3D[] {
+    return [];
+  }
 
   /**
    * Material de la herramienta con un acabado (uno por acabado, para resaltarla sola).

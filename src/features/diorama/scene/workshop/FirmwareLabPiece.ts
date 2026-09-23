@@ -1,5 +1,6 @@
 import { CatmullRomCurve3, Mesh, TubeGeometry, type Object3D, type Vector3 } from 'three';
 import { SceneObject } from '@shared/engine/SceneObject';
+import type { DetailAware } from '@shared/engine/DetailAware';
 import type { Updatable } from '@shared/engine/Updatable';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { FirmwarePhase } from '../../models/FirmwarePhase';
@@ -22,7 +23,7 @@ import { FirmwareLaptop } from './firmware/FirmwareLaptop';
  * programa que corre en la placa ({@link FirmwareService}) y muestra su estado; la pantalla se redibuja
  * pocas veces por segundo y solo si cambió.
  */
-export class FirmwareLabPiece extends SceneObject implements Updatable, Powerable {
+export class FirmwareLabPiece extends SceneObject implements Updatable, Powerable, DetailAware {
   private static readonly LAPTOP = { x: -0.98, z: 0, turn: 0.75 };
   private static readonly KIT = { x: -0.96, z: 0.52, turn: 0.5 };
   private static readonly MAT = 0.002;
@@ -40,6 +41,7 @@ export class FirmwareLabPiece extends SceneObject implements Updatable, Powerabl
   private hover: string | null = null;
   private redraw = 0;
   private readonly traffic = { count: -1, hold: 0 };
+  private detailed = true;
 
   /**
    * Crea la pieza.
@@ -108,6 +110,13 @@ export class FirmwareLabPiece extends SceneObject implements Updatable, Powerabl
   /**
    * @inheritdoc
    */
+  public setDetailed(detailed: boolean): void {
+    this.detailed = detailed;
+  }
+
+  /**
+   * @inheritdoc
+   */
   public update(delta: number, elapsed: number): void {
     this.service.advance(delta);
     const state = this.service.state;
@@ -122,7 +131,7 @@ export class FirmwareLabPiece extends SceneObject implements Updatable, Powerabl
     };
     this.kit.show(view, { delta, level: this.level });
     this.redraw -= delta;
-    if (this.redraw <= 0) {
+    if (this.redraw <= 0 && this.detailed) {
       const { active, idle } = FirmwareLabPiece.REDRAW;
       this.redraw = this.active ? active : idle;
       this.screen.draw(state, this.hover, elapsed);

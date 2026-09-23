@@ -1,4 +1,4 @@
-import { BoxGeometry, Group } from 'three';
+import { BoxGeometry, Group, type Object3D } from 'three';
 import { ToolId } from '../../models/ToolId';
 import type { ToolBounds } from '../../models/ToolBounds';
 import type { ToolOutline } from '../../models/ToolOutline';
@@ -60,6 +60,13 @@ export class Tweezers extends WallTool {
   public outline(): readonly ToolOutline[] {
     const { y, width, height, round } = Tweezers.SHADOW;
     return [{ x: 0, y, width, height, round }];
+  }
+
+  /**
+   * @inheritdoc
+   */
+  protected override moving(): Object3D[] {
+    return [...this.legs];
   }
 
   /**

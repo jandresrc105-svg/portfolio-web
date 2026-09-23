@@ -28,6 +28,7 @@ export class VendingCans {
   };
   private static readonly SHOWCASE = { pull: 0.07, spin: 1.3, rate: 7, brighten: 0.6, hover: 0.45 };
   private static readonly LABEL_ATTRIBUTE = 'canLabel';
+  private static readonly REST = 0.001;
   private static readonly FLAVORS = new CanFlavors();
 
   private readonly placement = new Object3D();
@@ -40,6 +41,7 @@ export class VendingCans {
   private flavors: readonly string[] = [];
   private selected = -1;
   private hovered = -1;
+  private focused = false;
 
   /**
    * Crea las latas.
@@ -147,13 +149,23 @@ export class VendingCans {
    * @returns `true` si hay una lata elegida.
    */
   public selectedBase(target: Vector3): boolean {
-    if (this.selected < 0) {
+    if (this.selected < 0 || !this.focused) {
       return false;
     }
     this.restPosition(this.selected, target);
     target.y -= VendingCans.CAN.height / 2;
     target.z += VendingCans.SHOWCASE.pull;
     return true;
+  }
+
+  /**
+   * Si la vitrina está enfocada: fuera de su parada la lata elegida vuelve a su lugar y deja de girar, así
+   * las latas quedan quietas y no cuestan nada.
+   *
+   * @param focused `true` con la cámara en la vitrina.
+   */
+  public setFocused(focused: boolean): void {
+    this.focused = focused;
   }
 
   /**
@@ -166,16 +178,33 @@ export class VendingCans {
     if (!mesh) {
       return;
     }
-    for (let index = 0; index < this.count; index += 1) {
-      this.animateCan(index, delta);
-      this.placeCan(index);
-      mesh.setMatrixAt(index, this.placement.matrix);
-      mesh.setColorAt(index, this.canTint(index));
+    if (!this.animateAll(mesh, delta)) {
+      return;
     }
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) {
       mesh.instanceColor.needsUpdate = true;
     }
+  }
+
+  /**
+   * Anima las latas que se están moviendo y escribe sus matrices y colores.
+   *
+   * @param mesh Malla instanciada de las latas.
+   * @param delta Segundos del frame.
+   * @returns `true` si alguna lata cambió.
+   */
+  private animateAll(mesh: InstancedMesh, delta: number): boolean {
+    let moved = false;
+    for (let index = 0; index < this.count; index += 1) {
+      if (this.animateCan(index, delta)) {
+        this.placeCan(index);
+        mesh.setMatrixAt(index, this.placement.matrix);
+        mesh.setColorAt(index, this.canTint(index));
+        moved = true;
+      }
+    }
+    return moved;
   }
 
   /**
@@ -221,17 +250,25 @@ export class VendingCans {
   }
 
   /**
-   * Acerca el resalte de una lata a su objetivo y la hace girar mientras sobresale.
+   * Acerca el resalte de una lata a su objetivo y la hace girar mientras sobresale. Una lata en reposo (sin
+   * resalte ni objetivo) no se toca.
    *
    * @param index Índice de la lata.
    * @param delta Segundos del frame.
+   * @returns `true` si la lata se movió y hay que redibujarla.
    */
-  private animateCan(index: number, delta: number): void {
+  private animateCan(index: number, delta: number): boolean {
     const { rate, spin } = VendingCans.SHOWCASE;
     const current = this.lifts[index] ?? 0;
-    const lift = current + (this.liftGoal(index) - current) * Math.min(delta * rate, 1);
+    const goal = this.liftGoal(index);
+    if (current === 0 && goal === 0) {
+      return false;
+    }
+    const eased = current + (goal - current) * Math.min(delta * rate, 1);
+    const lift = goal === 0 && eased < VendingCans.REST ? 0 : eased;
     this.lifts[index] = lift;
     this.spins[index] = (this.spins[index] ?? 0) + delta * spin * lift;
+    return true;
   }
 
   /**
@@ -242,7 +279,7 @@ export class VendingCans {
    */
   private liftGoal(index: number): number {
     if (index === this.selected) {
-      return 1;
+      return this.focused ? 1 : 0;
     }
     return index === this.hovered ? VendingCans.SHOWCASE.hover : 0;
   }

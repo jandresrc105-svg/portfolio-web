@@ -11,6 +11,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { PostProcessing } from './PostProcessing';
+import { ProgramSort } from './ProgramSort';
 import type { QualityProfile } from './QualityProfile';
 import { RenderLayer } from './RenderLayer';
 
@@ -32,6 +33,7 @@ export class Stage {
   private size = { width: 1, height: 1 };
   private resolutionScale = 1;
   private environment: WebGLRenderTarget | null = null;
+  private beforeRender: (() => void) | null = null;
 
   /**
    * Crea el escenario sobre un canvas.
@@ -52,6 +54,9 @@ export class Stage {
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.camera.layers.enable(RenderLayer.Background);
+    this.scene.matrixWorldAutoUpdate = false;
+    const sort = new ProgramSort();
+    this.renderer.setOpaqueSort(sort.compare.bind(sort));
     this.post = new PostProcessing(this.renderer, this.scene, this.camera, quality);
   }
 
@@ -124,10 +129,23 @@ export class Stage {
   }
 
   /**
-   * Dibuja un frame.
+   * Dibuja un frame. Las matrices de la escena se actualizan una sola vez aquí: three.js las recalcularía en
+   * cada `render` (la cámara y el espejo de los charcos), recorriendo todo el árbol dos veces por frame.
    */
   public render(): void {
+    this.scene.updateMatrixWorld();
+    this.beforeRender?.();
     this.post.render();
+  }
+
+  /**
+   * Registra trabajo que va justo antes del render principal, con las matrices ya al día (p. ej. un espejo que
+   * se dibuja por separado).
+   *
+   * @param hook Trabajo previo, o `null` para quitarlo.
+   */
+  public setBeforeRender(hook: (() => void) | null): void {
+    this.beforeRender = hook;
   }
 
   /**

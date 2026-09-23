@@ -224,6 +224,7 @@ export class BreakerPanel extends SceneObject implements Updatable, Powerable {
     meter.position.set(0, BreakerPanel.METER.y, BreakerPanel.METER.z);
     this.root.add(meter);
     this.root.position.copy(BreakerPanel.POSITION);
+    this.settle(this.door, meter, this.mainSwitch.group, ...this.stages.map(({ group }) => group));
     this.setPower(0);
   }
 

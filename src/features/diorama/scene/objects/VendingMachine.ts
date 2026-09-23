@@ -144,6 +144,15 @@ export class VendingMachine extends SceneObject implements Updatable, Powerable 
   }
 
   /**
+   * Avisa si la cámara está en la vitrina: fuera de ella las latas descansan y el selector se apaga.
+   *
+   * @param focused `true` con la cámara en la vitrina.
+   */
+  public setFocused(focused: boolean): void {
+    this.cans.setFocused(focused);
+  }
+
+  /**
    * Fija los elementos de la vitrina: solo sus latas responden al puntero y cada una lleva su sabor.
    *
    * @param flavors Sabor de la lata de cada elemento, en orden.
@@ -222,6 +231,7 @@ export class VendingMachine extends SceneObject implements Updatable, Powerable 
     this.add(this.light, { x: 0, y: VendingMachine.LIGHT.y, z: VendingMachine.LIGHT.z });
     this.root.position.copy(this.placement.position);
     this.root.rotation.y = this.placement.rotationY;
+    this.settle(this.selector);
     this.setPower(0);
   }
 

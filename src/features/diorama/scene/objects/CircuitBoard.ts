@@ -115,6 +115,7 @@ export class CircuitBoard extends SceneObject implements Updatable, Powerable {
     this.buildParts();
     this.buildMotor();
     this.buildProbe();
+    this.settle(this.motor.group);
   }
 
   /**

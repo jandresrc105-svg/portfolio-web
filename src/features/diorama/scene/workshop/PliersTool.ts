@@ -97,6 +97,13 @@ export abstract class PliersTool extends WallTool {
   protected abstract jaw(depth: number): BufferGeometry;
 
   /**
+   * @inheritdoc
+   */
+  protected override moving(): Object3D[] {
+    return [...this.halves];
+  }
+
+  /**
    * Detalles extra de la mitad del frente (serigrafía, muescas marcadas). Por defecto ninguno.
    *
    * @returns Objetos en el espacio de la mitad del frente.

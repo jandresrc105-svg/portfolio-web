@@ -10,7 +10,9 @@ import {
   type Vector3Like,
 } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
+import { GeometryBatcher } from '@shared/engine/GeometryBatcher';
 import { SceneObject } from '@shared/engine/SceneObject';
+import type { DetailAware } from '@shared/engine/DetailAware';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { BenchState } from '../../models/BenchState';
 import type { Powerable } from '../../models/Powerable';
@@ -31,7 +33,7 @@ import { WorkshopLayout } from './WorkshopLayout';
  * las placas de los proyectos colgadas en el tablero perforado. La placa elegida baja al banco y, con la
  * fuente encendida, la fuente marca su consumo, el multímetro su tensión y sus LEDs corren.
  */
-export class Workbench extends SceneObject implements Updatable, Powerable {
+export class Workbench extends SceneObject implements Updatable, Powerable, DetailAware {
   private static readonly CAPACITY = 4;
   private static readonly FINISH = {
     mat: { color: 0x2c5a66, roughness: 0.92, metalness: 0, envMapIntensity: 0.3 },
@@ -87,6 +89,7 @@ export class Workbench extends SceneObject implements Updatable, Powerable {
   private labels: readonly string[] = [];
   private level = 0;
   private refreshAt = 0;
+  private detailed = true;
 
   /**
    * Crea el banco.
@@ -172,12 +175,19 @@ export class Workbench extends SceneObject implements Updatable, Powerable {
   /**
    * @inheritdoc
    */
+  public setDetailed(detailed: boolean): void {
+    this.detailed = detailed;
+  }
+
+  /**
+   * @inheritdoc
+   */
   public update(delta: number, elapsed: number): void {
     this.boards.forEach((board) => {
       board.update(delta, elapsed);
     });
     this.gear.update(this.state.volts, this.level, elapsed);
-    if (elapsed < this.refreshAt) {
+    if (!this.detailed || elapsed < this.refreshAt) {
       return;
     }
     const { amount, speed, refresh } = Workbench.RIPPLE;
@@ -205,8 +215,9 @@ export class Workbench extends SceneObject implements Updatable, Powerable {
   protected override build(): void {
     this.buildTable();
     this.buildSupply();
+    const lamp = this.lamp.build();
     this.root.add(
-      this.lamp.build(),
+      lamp,
       this.gear.build((texture) => this.own(texture)),
     );
     this.pieces.set(this.ids.lamp, (active) => {
@@ -214,7 +225,30 @@ export class Workbench extends SceneObject implements Updatable, Powerable {
     });
     this.buildBoards();
     this.layout.place(this.root);
+    this.batchParts(lamp);
     this.setPower(0);
+  }
+
+  /**
+   * Une las mallas fijas: el equipo de medición entero, cada placa por dentro (se mueve completa) y la mesa. La
+   * fuente, la lámpara, las placas y sus clavijas quedan como están porque se mueven o se resaltan solas.
+   *
+   * @param lamp Raíz de la lámpara de lupa.
+   */
+  private batchParts(lamp: Object3D): void {
+    this.root.updateMatrixWorld(true);
+    const batcher = new GeometryBatcher();
+    batcher.batch(this.gear.group);
+    this.boards.forEach((board) => {
+      batcher.batch(board.group, [board.hitArea]);
+    });
+    this.settle(
+      this.supply.group,
+      lamp,
+      this.gear.group,
+      ...this.boards.map(({ group }) => group),
+      ...this.pegs,
+    );
   }
 
   /**

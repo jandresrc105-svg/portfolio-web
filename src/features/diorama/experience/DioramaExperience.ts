@@ -1,12 +1,16 @@
+import { gsap } from 'gsap';
 import { Vector3 } from 'three';
 import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import { SeededRandom } from '@shared/core/math/SeededRandom';
 import { AdaptiveResolution } from '@shared/engine/AdaptiveResolution';
+import { DetailCuller } from '@shared/engine/DetailCuller';
+import { LightZones } from '@shared/engine/LightZones';
 import { PointerPicker } from '@shared/engine/PointerPicker';
 import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
 import { RenderLoop } from '@shared/engine/RenderLoop';
 import { Stage } from '@shared/engine/Stage';
+import { UpdateScheduler } from '@shared/engine/UpdateScheduler';
 import { AudibleSwitch } from '../audio/AudibleSwitch';
 import type { Soundscape } from '../audio/Soundscape';
 import { CameraDirector } from '../camera/CameraDirector';
@@ -37,6 +41,8 @@ import { PhoneInteraction } from './PhoneInteraction';
 export class DioramaExperience {
   private static readonly SEED = 20240601;
   private static readonly ENVIRONMENT_INTENSITY = 0.5;
+  private static readonly ZONES = { street: 'street', workshop: 'workshop' };
+  private static readonly TRAVEL_SECONDS = 1.7;
 
   private readonly stage: Stage;
   private readonly diorama: DioramaScene;
@@ -45,6 +51,11 @@ export class DioramaExperience {
   private readonly picker = new PointerPicker<HotspotMarker>();
   private readonly controls = new PointerPicker<ScopeControlId>();
   private readonly resolution: AdaptiveResolution;
+  private readonly scheduler: UpdateScheduler;
+  private readonly culler: DetailCuller;
+  private lights: LightZones | null = null;
+  private lightsCall: gsap.core.Tween | null = null;
+  private lastStop = 0;
   private readonly focus = new Vector3();
   private readonly stations: { stops: readonly number[]; device: DeviceInteraction }[] = [];
   private phone: PhoneInteraction | null = null;
@@ -81,10 +92,10 @@ export class DioramaExperience {
     const audio = sound.audio;
     this.diorama = new DioramaScene({ materials, textures, random, quality, instrument, weather, audio });
     this.director = new CameraDirector(this.stage.camera, canvas);
-    this.resolution = new AdaptiveResolution(this.stage, quality);
-    this.loop = new RenderLoop(this.stage.renderer, () => {
-      this.stage.render();
-    });
+    this.resolution = new AdaptiveResolution(this.stage, quality, () => this.loop.resting);
+    this.scheduler = new UpdateScheduler(this.stage.camera);
+    this.culler = new DetailCuller(this.stage.camera);
+    this.loop = new RenderLoop(this.stage.renderer, this.stage.render.bind(this.stage));
   }
 
   /**
@@ -126,10 +137,10 @@ export class DioramaExperience {
     this.connectPanel();
     this.connectWorkshop();
     this.connectSound();
-    this.diorama.puddles?.reflectOnly(this.stage.camera, RenderLayer.Reflected);
-    this.loop.add(this.director, this.resolution, this.sound, this.devices.phone, ...this.diorama.updatables);
+    this.connectMirror();
+    this.schedule();
     this.resize(width, height);
-    await this.stage.warmUp();
+    await this.warmUp();
     this.loop.start();
   }
 
@@ -152,8 +163,11 @@ export class DioramaExperience {
    * @param stop Índice de la parada (0 = vista general; luego una por sección, en orden).
    */
   public travelTo(stop: number): void {
+    this.loop.wake();
     this.stop = stop;
     this.director.travelTo(stop);
+    this.diorama.vending?.setFocused(stop === this.diorama.showcaseStop);
+    this.switchLights(stop);
     this.stations.forEach((station) => {
       station.device.setActive(station.stops.includes(stop));
     });
@@ -166,6 +180,7 @@ export class DioramaExperience {
    * @param y Vertical normalizado [-1, 1].
    */
   public setPointer(x: number, y: number): void {
+    this.loop.wake();
     this.picker.setPointer(x, y);
     this.controls.setPointer(x, y);
     this.stations.forEach(({ device }) => {
@@ -232,6 +247,7 @@ export class DioramaExperience {
    * @param pixels Desplazamiento vertical desde que se tomó (positivo = hacia arriba).
    */
   public turnControl(pixels: number): void {
+    this.loop.wake();
     this.turning?.apply(pixels);
   }
 
@@ -254,6 +270,7 @@ export class DioramaExperience {
    * @param item Índice del elemento (desde 0).
    */
   public showItem(item: number): void {
+    this.loop.wake();
     this.diorama.vending?.select(item);
   }
 
@@ -318,6 +335,7 @@ export class DioramaExperience {
    * Confirma la selección del marcador señalado con su sonido.
    */
   public select(): void {
+    this.loop.wake();
     this.sound.select();
   }
 
@@ -339,6 +357,7 @@ export class DioramaExperience {
    * @returns `true` si se usó un control.
    */
   public pressDevice(): boolean {
+    this.loop.wake();
     return this.hoverDevice() !== null && (this.station()?.press() ?? false);
   }
 
@@ -349,6 +368,7 @@ export class DioramaExperience {
    * @returns `true` si se marcó.
    */
   public dialPhone(key: string): boolean {
+    this.loop.wake();
     if (!this.interactive || this.stop !== this.diorama.contactStop) {
       return false;
     }
@@ -383,6 +403,7 @@ export class DioramaExperience {
   public resize(width: number, height: number): void {
     this.stage.resize(width, height);
     this.director.resize();
+    this.culler.setViewport(this.stage.renderer.domElement.height);
   }
 
   /**
@@ -397,6 +418,83 @@ export class DioramaExperience {
     this.sound.dispose();
     this.diorama.dispose();
     this.stage.dispose();
+  }
+
+  /**
+   * Compila shaders y sube texturas antes de mostrar la escena, incluidas las variantes de las zonas de luz.
+   *
+   * @returns Promesa que se resuelve al terminar.
+   */
+  private async warmUp(): Promise<void> {
+    await this.stage.warmUp();
+    const lights = new LightZones(this.stage.renderer, this.stage.scene, this.stage.camera);
+    const { street, workshop } = DioramaExperience.ZONES;
+    lights.assign(street, this.diorama.streetRoots);
+    lights.assign(workshop, this.diorama.workshopRoots);
+    await lights.precompile([[street], [workshop]]);
+    this.lights = lights;
+  }
+
+  /**
+   * Enciende las zonas de luz de la parada destino. Durante el viaje quedan las de las dos paradas, para que la
+   * luz no cambie a la vista; al llegar, solo las del destino.
+   *
+   * @param stop Parada destino.
+   */
+  private switchLights(stop: number): void {
+    const target = this.zonesFor(stop);
+    this.lightsCall?.kill();
+    this.lights?.show([...new Set([...this.zonesFor(this.lastStop), ...target])]);
+    this.lastStop = stop;
+    this.lightsCall = gsap.delayedCall(DioramaExperience.TRAVEL_SECONDS, () => {
+      this.lights?.show(target);
+    });
+  }
+
+  /**
+   * Zonas de luz que se ven desde una parada: todas en la vista general, el taller en sus paradas y la calle en
+   * las demás.
+   *
+   * @param stop Parada.
+   * @returns Zonas visibles.
+   */
+  private zonesFor(stop: number): string[] {
+    const { street, workshop } = DioramaExperience.ZONES;
+    if (stop === 0) {
+      return [street, workshop];
+    }
+    return this.diorama.workshopStops.includes(stop) ? [workshop] : [street];
+  }
+
+  /**
+   * El espejo de los charcos refleja solo la capa luminosa y se dibuja antes del render principal.
+   */
+  private connectMirror(): void {
+    const puddles = this.diorama.puddles;
+    const { renderer, scene, camera } = this.stage;
+    puddles?.reflectOnly(camera, RenderLayer.Reflected);
+    this.stage.setBeforeRender(() => {
+      puddles?.reflect(renderer, scene, camera);
+    });
+  }
+
+  /**
+   * Actualización a pedido: las piezas animadas solo trabajan cuando la cámara las ve (y a ritmo completo solo
+   * de cerca), los detalles diminutos salen del render desde lejos y el bucle entra en reposo cuando la cámara
+   * se queda quieta y nadie interactúa.
+   */
+  private schedule(): void {
+    this.diorama.pieces.forEach((piece) => {
+      this.scheduler.track(piece, piece.root);
+    });
+    this.diorama.roots.forEach((root) => {
+      this.culler.track(root);
+    });
+    this.loop.add(this.director, this.resolution, this.sound, this.devices.phone, ...this.diorama.updatables);
+    this.loop.add(this.scheduler, this.culler);
+    this.director.onMotion(() => {
+      this.loop.wake();
+    });
   }
 
   /**

@@ -98,6 +98,7 @@ export class KitchenProps extends SceneObject implements Updatable {
     this.buildBowls();
     this.buildBottles();
     this.add(this.steam.create());
+    this.settle(this.steam.root);
   }
 
   /**

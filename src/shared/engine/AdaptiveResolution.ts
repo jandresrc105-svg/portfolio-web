@@ -37,10 +37,12 @@ export class AdaptiveResolution implements Updatable {
    *
    * @param stage Escenario cuya resolución se ajusta.
    * @param quality Perfil de calidad (escalas mínima y máxima permitidas).
+   * @param resting Si el bucle está en reposo: mientras lo está, los frames son lentos a propósito y no se miden.
    */
   public constructor(
     private readonly stage: Stage,
     quality: Pick<QualityProfile, 'minResolutionScale' | 'maxResolutionScale'>,
+    private readonly resting: () => boolean = (): boolean => false,
   ) {
     this.ceiling = quality.maxResolutionScale;
     this.maxScale = quality.maxResolutionScale;
@@ -65,6 +67,10 @@ export class AdaptiveResolution implements Updatable {
       this.warmup -= delta;
       return;
     }
+    if (this.resting()) {
+      this.resetSample();
+      return;
+    }
     this.frames += 1;
     this.slowFrames += delta > AdaptiveResolution.SLOW_FRAME_SECONDS ? 1 : 0;
     this.seconds += delta;
@@ -73,6 +79,13 @@ export class AdaptiveResolution implements Updatable {
       return;
     }
     this.evaluate(this.slowFrames / this.frames);
+    this.resetSample();
+  }
+
+  /**
+   * Empieza una muestra nueva de frames.
+   */
+  private resetSample(): void {
     this.frames = 0;
     this.slowFrames = 0;
     this.seconds = 0;
