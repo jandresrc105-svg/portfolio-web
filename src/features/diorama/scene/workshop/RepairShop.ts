@@ -17,9 +17,10 @@ import { WorkshopArt } from './WorkshopArt';
 import { WorkshopLayout } from './WorkshopLayout';
 
 /**
- * Local del taller de electrónica, al estilo de los puestitos de componentes de Akihabara: piso de concreto,
- * paredes pintadas, techo con alero, cortina metálica enrollada, tablero perforado al fondo y un tubo
- * fluorescente bajo el techo. El letrero de neón, el banco y los equipos interactivos son piezas aparte.
+ * Local del taller de electrónica en el segundo piso, al estilo de los puestitos de componentes de Akihabara:
+ * piso de concreto, paredes pintadas (la derecha con la puerta de la escalera), techo con alero, cortina
+ * metálica enrollada, tablero perforado al fondo y un tubo fluorescente bajo el techo. El letrero de neón, el
+ * banco, los equipos interactivos, la base sobre el ramen y la escalera son piezas aparte.
  */
 export class RepairShop extends SceneObject implements Powerable {
   private static readonly FINISH = {
@@ -35,7 +36,7 @@ export class RepairShop extends SceneObject implements Powerable {
   private static readonly LIFT = 0.001;
   private static readonly TUBE = {
     radius: 0.018,
-    length: 1.8,
+    length: 3,
     drop: 0.07,
     z: 0.05,
     color: 0xe4f4ff,
@@ -94,14 +95,27 @@ export class RepairShop extends SceneObject implements Powerable {
       this.materials.concrete,
     );
     this.box({ x: width, y: height, z: wall }, { x: 0, y: height / 2, z: (wall - depth) / 2 }, paint);
-    [-1, 1].forEach((side) => {
-      this.box(
-        { x: wall, y: height, z: depth },
-        { x: (side * (width - wall)) / 2, y: height / 2, z: 0 },
-        paint,
-      );
-    });
+    this.box({ x: wall, y: height, z: depth }, { x: (wall - width) / 2, y: height / 2, z: 0 }, paint);
+    this.buildDoorWall(paint);
     this.buildRoof();
+  }
+
+  /**
+   * Pared derecha con el vano de la puerta que da a la escalera exterior: un tramo a cada lado y el dintel.
+   *
+   * @param paint Pintura de las paredes.
+   */
+  private buildDoorWall(paint: Material): void {
+    const { width, depth, height, wall } = WorkshopLayout.SHOP;
+    const door = WorkshopLayout.DOOR;
+    const x = (width - wall) / 2;
+    const front = door.z + door.width / 2;
+    const back = door.z - door.width / 2;
+    const half = depth / 2;
+    this.box({ x: wall, y: height, z: half - front }, { x, y: height / 2, z: (half + front) / 2 }, paint);
+    this.box({ x: wall, y: height, z: back + half }, { x, y: height / 2, z: (back - half) / 2 }, paint);
+    const lintel = height - door.height;
+    this.box({ x: wall, y: lintel, z: door.width }, { x, y: door.height + lintel / 2, z: door.z }, paint);
   }
 
   /**

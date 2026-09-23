@@ -24,7 +24,7 @@ export class Puddles extends SceneObject implements Updatable {
   private static readonly PUDDLES = [
     { x: 1.2, z: 2.75, width: 2.3, depth: 1.1 },
     { x: -1.4, z: 3.3, width: 1.7, depth: 0.85 },
-    { x: 2.9, z: 1.95, width: 1.1, depth: 0.6 },
+    { x: 2.9, z: 2.65, width: 1.1, depth: 0.6 },
     { x: -0.2, z: 4.4, width: 1.4, depth: 0.55 },
     { x: 3.4, z: 3.7, width: 1, depth: 0.7 },
     { x: -3.1, z: 3.1, width: 0.9, depth: 0.5 },

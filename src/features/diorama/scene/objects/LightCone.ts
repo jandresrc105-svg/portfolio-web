@@ -10,9 +10,9 @@ import vertexShader from '../shaders/cone.vert.glsl?raw';
  * Da la sensación de luz atravesando la lluvia sin el costo de un volumen real.
  */
 export class LightCone extends SceneObject implements Powerable {
-  private static readonly APEX = { x: -2.45, y: 4.42, z: -0.95 };
+  private static readonly APEX = { x: -5.05, y: 4.42, z: -0.95 };
   private static readonly SHAPE = { radius: 2.1, height: 4.4 };
-  private static readonly TILT = { x: 0.22, z: -0.12 };
+  private static readonly TILT = { x: -0.22, z: -0.12 };
   private static readonly COLOR = 0xcfe0ff;
   private static readonly INTENSITY = 0.16;
 

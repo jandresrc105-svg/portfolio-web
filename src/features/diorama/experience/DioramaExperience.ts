@@ -442,12 +442,12 @@ export class DioramaExperience {
   }
 
   /**
-   * Conecta el tablero del poste con el puntero, el sonido y la farola que controla su MAIN.
+   * Conecta el tablero del poste con el puntero, el sonido y la red de la calle que controla su MAIN.
    */
   private connectPanel(): void {
-    const { breakerPanel, streetLine } = this.diorama;
-    if (breakerPanel && streetLine) {
-      const panel = new PanelInteraction(this.devices.panel, breakerPanel, streetLine, this.sound);
+    const { breakerPanel, grid } = this.diorama;
+    if (breakerPanel) {
+      const panel = new PanelInteraction(this.devices.panel, breakerPanel, grid, this.sound);
       this.stations.push({ stops: [this.diorama.timelineStop], device: panel });
     }
   }

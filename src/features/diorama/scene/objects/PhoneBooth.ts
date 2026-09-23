@@ -28,7 +28,7 @@ import { PhoneBoothArt } from './PhoneBoothArt';
  * el teléfono se usa de verdad (ver {@link PayPhone}): la cabina solo lo aloja y le pasa las órdenes.
  */
 export class PhoneBooth extends SceneObject implements Updatable, Powerable {
-  private static readonly POSITION = { x: -3.1, y: 0, z: 2.2 };
+  private static readonly POSITION = { x: -4.2, y: 0.1, z: 0.9 };
   private static readonly ROTATION_Y = 0.4;
   private static readonly FINISH = {
     frame: { color: 0x1d4a36, roughness: 0.4, metalness: 0.6 },

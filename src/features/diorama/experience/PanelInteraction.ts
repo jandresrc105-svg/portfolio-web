@@ -6,7 +6,7 @@ import type { DeviceInteraction } from '../models/DeviceInteraction';
 import type { PanelEvent } from '../models/PanelEvent';
 import type { BreakerPanelService } from '../services/BreakerPanelService';
 import type { BreakerPanel } from '../scene/panel/BreakerPanel';
-import type { SwitchedLine } from '../scene/SwitchedLine';
+import type { PowerSwitch } from '../models/PowerSwitch';
 
 /**
  * Conecta el tablero del poste (patrón Mediator): el puntero toma la puerta y las palancas,
@@ -24,13 +24,13 @@ export class PanelInteraction implements DeviceInteraction {
    *
    * @param panel Tablero (estado y reglas).
    * @param scene Tablero 3D.
-   * @param street Línea de la farola, detrás del MAIN.
+   * @param street Red de la calle (farola, ramen y semáforo), detrás del MAIN.
    * @param sound Paisaje sonoro.
    */
   public constructor(
     private readonly panel: BreakerPanelService,
     private readonly scene: BreakerPanel,
-    private readonly street: SwitchedLine,
+    private readonly street: PowerSwitch,
     private readonly sound: Soundscape,
   ) {
     scene.controls().forEach(({ id, hitArea }) => {

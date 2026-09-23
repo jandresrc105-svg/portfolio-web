@@ -16,14 +16,14 @@ export class CameraDirector implements Updatable {
     target: { x: 0, y: 0.6, z: 0 },
   };
   private static readonly SHOTS: CameraShot[] = [
-    { position: { x: 6.42, y: 3.65, z: 10.88 }, target: { x: -1.2, y: 1.35, z: 0.8 } },
+    { position: { x: 8.3, y: 6.8, z: 13.7 }, target: { x: -1.6, y: 2.6, z: 0.6 } },
     { position: { x: -1.5, y: 2.3, z: 4.5 }, target: { x: 0.4, y: 1.3, z: 1.1 } },
     { position: { x: 2.88, y: 1.35, z: 2.72 }, target: { x: 3.05, y: 1.08, z: 0.32 } },
     { position: { x: -3.55, y: 1.62, z: 1.3 }, target: { x: -3.28, y: 1.3, z: -0.78 } },
-    { position: { x: -4.8, y: 1.95, z: 2.7 }, target: { x: -7.03, y: 1.35, z: 1.56 } },
-    { position: { x: -6.34, y: 1.35, z: 2.6 }, target: { x: -7.48, y: 1.02, z: 2.22 } },
-    { position: { x: -3.91, y: 2, z: 4.46 }, target: { x: -7.3, y: 1.3, z: 2.52 } },
-    { position: { x: -2.89, y: 1.45, z: 3.22 }, target: { x: -3.41, y: 1.3, z: 1.97 } },
+    { position: { x: 0.74, y: 5.2, z: 1.25 }, target: { x: 0.5, y: 4.6, z: -1.24 } },
+    { position: { x: 0, y: 4.6, z: -0.1 }, target: { x: -0.3, y: 4.27, z: -1.27 } },
+    { position: { x: -0.26, y: 5.25, z: 2.95 }, target: { x: -0.46, y: 4.55, z: -0.95 } },
+    { position: { x: -3.99, y: 1.55, z: 1.92 }, target: { x: -4.51, y: 1.4, z: 0.67 } },
   ];
   private static readonly CONTROLS = { damping: 0.06, rotateSpeed: 0.9, zoomSpeed: 0.8 };
   private static readonly TRAVEL = { duration: 1.6, ease: 'power2.inOut', lift: 0.12, maxLift: 1.4 };

@@ -28,13 +28,19 @@ export class UtilityPole extends SceneObject implements Powerable {
   ];
   private static readonly ARM_SIZE = 0.1;
   private static readonly TRANSFORMER = { radius: 0.24, height: 0.62, x: 0.34, y: 4.9 };
-  private static readonly LAMP = { armLength: 1.3, y: 4.55, headWidth: 0.42, color: 0xd6e6ff, intensity: 38 };
+  private static readonly LAMP = {
+    armLength: -1.3,
+    y: 4.55,
+    headWidth: 0.42,
+    color: 0xd6e6ff,
+    intensity: 38,
+  };
   private static readonly WIRE_RADIUS = 0.012;
   private static readonly WIRE_SAG = 0.9;
   private static readonly WIRE_ENDS = [
     { x: -14, y: 5.4, z: -9 },
     { x: 9, y: 7.5, z: -14 },
-    { x: 1.6, y: 2.95, z: -1.1 },
+    { x: -2.3, y: 5.3, z: -1.3 },
   ];
   private static readonly LAMP_HEAD = { height: 0.08, depth: 0.22 };
   private static readonly LAMP_ARM = { height: 0.06 };
@@ -111,24 +117,24 @@ export class UtilityPole extends SceneObject implements Powerable {
   }
 
   /**
-   * Brazo de farola con cabezal luminoso y foco hacia la calle.
+   * Brazo de farola con cabezal luminoso y foco hacia la calle de la izquierda (lejos del edificio).
    */
   private buildLamp(): void {
     const { armLength, y, headWidth } = UtilityPole.LAMP;
     const { height, depth } = UtilityPole.LAMP_HEAD;
     this.box(
-      { x: armLength, y: UtilityPole.LAMP_ARM.height, z: UtilityPole.LAMP_ARM.height },
+      { x: Math.abs(armLength), y: UtilityPole.LAMP_ARM.height, z: UtilityPole.LAMP_ARM.height },
       { x: armLength / 2, y, z: 0 },
       this.materials.darkMetal,
     );
     this.box({ x: headWidth, y: height, z: depth }, { x: armLength, y: y - height, z: 0 }, this.lamp);
     this.add(this.spot, { x: armLength, y: y - height, z: 0 });
-    this.spot.target.position.set(armLength + 1, 0, 2);
+    this.spot.target.position.set(armLength + Math.sign(armLength), 0, 2);
     this.add(this.spot.target);
   }
 
   /**
-   * Cables que cuelgan desde la cruceta hacia la oscuridad y hacia el techo del puesto.
+   * Cables que cuelgan desde la cruceta hacia la oscuridad y la acometida al segundo piso del edificio.
    */
   private buildWires(): void {
     const [upper] = UtilityPole.ARMS;

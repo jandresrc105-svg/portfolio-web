@@ -1,11 +1,12 @@
-import { BoxGeometry, ExtrudeGeometry, Mesh, Shape, Vector2 } from 'three';
+import { ExtrudeGeometry, Mesh, Shape, Vector2 } from 'three';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { MaterialLibrary } from '../MaterialLibrary';
 
 /**
- * Isla flotante: un trozo de calle arrancado del suelo, con la parte inferior rocosa y afilada. Hacia la
- * izquierda se ensancha para darle espacio al taller de electrónica.
+ * Isla flotante: un trozo de esquina arrancado del suelo, con la parte inferior rocosa y afilada. Hacia la
+ * izquierda y adelante se ensancha para que quepa el cruce de las dos calles. La acera es una pieza aparte
+ * ({@link Sidewalk}) que usa {@link Island.innerRadius} para no salirse del borde.
  */
 export class Island extends SceneObject {
   private static readonly RADIUS = 6.2;
@@ -18,7 +19,6 @@ export class Island extends SceneObject {
   private static readonly WIDTH_JITTER = 0.3;
   private static readonly HASH = { x: 12.9898, y: 37.719, z: 78.233, scale: 43758.5453 };
   private static readonly ANNEX = { angle: 2.8, amount: 0.62, width: 0.42 };
-  private static readonly SIDEWALK = { width: 5.6, height: 0.1, depth: 4.4, x: 0, y: 0.05, z: -0.1 };
 
   /**
    * Crea la isla.
@@ -34,13 +34,21 @@ export class Island extends SceneObject {
   }
 
   /**
+   * Radio hasta donde se puede construir sin salirse del borde irregular, en una dirección del plano.
+   *
+   * @param angle Ángulo en el plano del suelo (atan2 de z sobre x).
+   * @returns Radio seguro.
+   */
+  public static innerRadius(angle: number): number {
+    return (Island.RADIUS - Island.EDGE_JITTER) * Island.annex(angle);
+  }
+
+  /**
    * @inheritdoc
    */
   protected override build(): void {
     const ground = this.add(new Mesh(this.geometry(), [this.materials.asphalt, this.materials.rock]));
     ground.receiveShadow = true;
-    const { width, height, depth, ...position } = Island.SIDEWALK;
-    this.add(new Mesh(new BoxGeometry(width, height, depth), this.materials.concrete), position);
   }
 
   /**
@@ -110,7 +118,7 @@ export class Island extends SceneObject {
   }
 
   /**
-   * Ensanche de la isla hacia la izquierda, donde está el taller de electrónica: un lóbulo suave que crece
+   * Ensanche de la isla hacia la esquina (adelante a la izquierda), donde se cruzan las calles: un lóbulo que crece
    * alrededor de un ángulo, así el resto del contorno queda igual.
    *
    * @param angle Ángulo del punto del contorno.

@@ -169,7 +169,7 @@
     "align": "right",
     "paragraphs": [
       "El tablero del poste guarda por dónde ha pasado la corriente. Ábrelo y sube los breakers: cada uno es una etapa, y cuando todos están arriba la corriente llega al presente.",
-      "El MAIN apaga y prende la farola; el medidor cuenta mi tiempo de experiencia."
+      "El MAIN corta la red de la calle: se apagan la farola, el ramen y el semáforo, pero el taller de arriba sigue con su batería solar. El medidor cuenta mi tiempo de experiencia."
     ],
     "timeline": true,
     "since": "2024-07-01",
@@ -233,7 +233,7 @@
     "align": "left",
     "bench": true,
     "paragraphs": [
-      "El taller de al lado es mi banco de pruebas. Cada placa colgada en el tablero es un proyecto: recórrelas con las flechas o haz clic en una placa para llevarla al banco.",
+      "El taller del segundo piso es mi banco de pruebas. Cada placa colgada en el tablero es un proyecto: recórrelas con las flechas o haz clic en una placa para llevarla al banco.",
       "La fuente y la lámpara de lupa funcionan: apágalas y préndelas con un clic."
     ],
     "items": [

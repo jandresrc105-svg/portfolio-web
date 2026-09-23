@@ -11,15 +11,23 @@ import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import type { CanvasTextureFactory } from '../CanvasTextureFactory';
+import { Island } from './Island';
 
 /**
- * Marcas de la calle: paso de cebra con la pintura gastada y una tapa de alcantarilla metálica.
+ * Marcas de las dos calles de la esquina: un paso de cebra en cada una (junto al semáforo), la línea
+ * discontinua del centro de la calle de adelante y una tapa de alcantarilla metálica. La pintura está gastada y
+ * lo que caería fuera del borde de la isla no se pinta.
  * Pintura y metal son más lisos que el asfalto, así que brillan con los neones cuando el suelo está mojado.
  */
 export class StreetMarkings extends SceneObject {
-  private static readonly STRIPES = [{ x: -2.6 }, { x: -1.98 }, { x: -1.36 }, { x: -0.74 }, { x: -0.12 }];
-  private static readonly STRIPE = { width: 0.36, length: 1, z: 3.9, y: 0.003, turn: 0.08 };
-  private static readonly MANHOLE = { radius: 0.34, x: 2.35, y: 0.003, z: 4.3 };
+  private static readonly CROSSWALKS = [
+    { start: { x: -3.95, z: 2.55 }, step: { x: 0, z: 0.6 }, count: 7, quarter: true },
+    { start: { x: -5.4, z: 0.9 }, step: { x: -0.6, z: 0 }, count: 6, quarter: false },
+  ];
+  private static readonly STRIPE = { width: 0.36, length: 1.3, y: 0.003 };
+  private static readonly CENTER_LINE = { from: -2.8, to: 6, z: 4.7, dash: 0.9, gap: 0.8, width: 0.1 };
+  private static readonly EDGE = 0.9;
+  private static readonly MANHOLE = { radius: 0.34, x: 2.35, y: 0.003, z: 3.35 };
   private static readonly CANVAS = { stripe: { width: 64, height: 160, wear: 140 }, manhole: 128 };
   private static readonly WEAR = { alpha: 0.3, maxRadius: 6 };
   private static readonly COVER = { roughness: 0.3, metalness: 0.85, rim: 4, inner: 0.62, grid: 12 };
@@ -47,16 +55,10 @@ export class StreetMarkings extends SceneObject {
   }
 
   /**
-   * Franjas del paso de cebra, en una sola geometría.
+   * Franjas de los pasos de cebra y trazos de la línea del centro, en una sola geometría.
    */
   private buildCrosswalk(): void {
-    const { width, length, z, y, turn } = StreetMarkings.STRIPE;
-    const pieces: BufferGeometry[] = StreetMarkings.STRIPES.map(({ x }) =>
-      new PlaneGeometry(width, length)
-        .rotateX(-Math.PI / 2)
-        .rotateY(turn)
-        .translate(x, y, z),
-    );
+    const pieces = [...this.stripes(), ...this.centerLine()];
     const paint = new MeshStandardMaterial({
       ...StreetMarkings.PAINT,
       map: this.own(this.wornPaint()),
@@ -67,6 +69,46 @@ export class StreetMarkings extends SceneObject {
     pieces.forEach((piece) => {
       piece.dispose();
     });
+  }
+
+  /**
+   * Franjas de los dos pasos de cebra: largas en el sentido de la calle y repetidas a lo ancho.
+   *
+   * @returns Geometrías de las franjas.
+   */
+  private stripes(): BufferGeometry[] {
+    const { width, length, y } = StreetMarkings.STRIPE;
+    return StreetMarkings.CROSSWALKS.flatMap(({ start, step, count, quarter }) =>
+      Array.from({ length: count }, (_, index) => ({
+        x: start.x + step.x * index,
+        z: start.z + step.z * index,
+      }))
+        .filter(({ x, z }) => StreetMarkings.inside(x, z, length / 2))
+        .map(({ x, z }) =>
+          new PlaneGeometry(width, length)
+            .rotateX(-Math.PI / 2)
+            .rotateY(quarter ? Math.PI / 2 : 0)
+            .translate(x, y, z),
+        ),
+    );
+  }
+
+  /**
+   * Trazos de la línea discontinua del centro de la calle de adelante.
+   *
+   * @returns Geometrías de los trazos.
+   */
+  private centerLine(): BufferGeometry[] {
+    const { from, to, z, dash, gap, width } = StreetMarkings.CENTER_LINE;
+    const pieces: BufferGeometry[] = [];
+    for (let x = from; x + dash <= to; x += dash + gap) {
+      const center = x + dash / 2;
+      if (StreetMarkings.inside(center, z, dash / 2)) {
+        const piece = new PlaneGeometry(width, dash).rotateX(-Math.PI / 2).rotateY(Math.PI / 2);
+        pieces.push(piece.translate(center, StreetMarkings.STRIPE.y, z));
+      }
+    }
+    return pieces;
   }
 
   /**
@@ -146,5 +188,17 @@ export class StreetMarkings extends SceneObject {
         context.strokeRect(half / 2, half + line, half, 1);
       }
     });
+  }
+
+  /**
+   * Si una marca cabe completa dentro del borde de la isla.
+   *
+   * @param x Posición x del centro.
+   * @param z Posición z del centro.
+   * @param reach Distancia del centro al extremo de la marca.
+   * @returns `true` si se puede pintar.
+   */
+  private static inside(x: number, z: number, reach: number): boolean {
+    return Math.hypot(x, z) + reach < Island.innerRadius(Math.atan2(z, x)) * StreetMarkings.EDGE;
   }
 }

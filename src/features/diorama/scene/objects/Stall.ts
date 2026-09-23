@@ -32,6 +32,17 @@ export class Stall extends SceneObject {
   }
 
   /**
+   * Altura de la cara superior del techo inclinado en una profundidad dada (donde se apoya el segundo piso).
+   *
+   * @param z Profundidad (coordenada z).
+   * @returns Altura de la cara superior.
+   */
+  public static roofTop(z: number): number {
+    const { height, y, z: center, tilt } = Stall.ROOF;
+    return y + height / (2 * Math.cos(tilt)) - (z - center) * Math.tan(tilt);
+  }
+
+  /**
    * @inheritdoc
    */
   protected override build(): void {

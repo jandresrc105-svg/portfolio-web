@@ -6,8 +6,10 @@ import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { Hotspot } from '../models/Hotspot';
+import { CrossingSound } from '../audio/CrossingSound';
 import { PowerMode } from '../models/PowerMode';
 import type { Placement } from '../models/Placement';
+import type { Powerable } from '../models/Powerable';
 import type { WorkshopDevice } from '../models/WorkshopDevice';
 import type { PowerStep } from '../models/PowerStep';
 import type { Weather } from '../models/Weather';
@@ -16,9 +18,9 @@ import { PayPhoneService } from '../services/PayPhoneService';
 import { WorkbenchService } from '../services/WorkbenchService';
 import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from './CanvasTextureFactory';
+import { PowerGrid } from './PowerGrid';
 import { PowerGroup } from './PowerGroup';
 import { Storm } from './Storm';
-import { SwitchedLine } from './SwitchedLine';
 import type { MaterialLibrary } from './MaterialLibrary';
 import type { DioramaSceneOptions } from './DioramaSceneOptions';
 import { Chef } from './characters/Chef';
@@ -44,16 +46,22 @@ import { Rain } from './objects/Rain';
 import { RainSplashes } from './objects/RainSplashes';
 import { RamenBowl } from './objects/RamenBowl';
 import { RoofDrips } from './objects/RoofDrips';
+import { Sidewalk } from './objects/Sidewalk';
 import { SideBlinds } from './objects/SideBlinds';
 import { SkyDome } from './objects/SkyDome';
 import { Stall } from './objects/Stall';
 import { StallInterior } from './objects/StallInterior';
 import { StreetMarkings } from './objects/StreetMarkings';
 import { StringLights } from './objects/StringLights';
+import { TrafficSignal } from './objects/TrafficSignal';
 import { UtilityPole } from './objects/UtilityPole';
 import { VendingMachine } from './objects/VendingMachine';
 import { BreakerPanel } from './panel/BreakerPanel';
 import { RepairShop } from './workshop/RepairShop';
+import { ShopPlinth } from './workshop/ShopPlinth';
+import { ShopStairs } from './workshop/ShopStairs';
+import { SolarArray } from './workshop/SolarArray';
+import { SolarController } from './workshop/SolarController';
 import { Workbench } from './workshop/Workbench';
 import { WorkshopCatalog } from './workshop/WorkshopCatalog';
 import { WorkshopLayout } from './workshop/WorkshopLayout';
@@ -67,12 +75,12 @@ export class DioramaScene {
     { sectionId: 'sobre-mi', label: 'Sobre mí', anchor: { x: 0.5, y: 2.08, z: 1.9 } },
     { sectionId: 'tecnologias', label: 'Tecnologías', anchor: { x: 3.55, y: 2.25, z: 0.35 } },
     { sectionId: 'experiencia', label: 'Experiencia', anchor: { x: -3.75, y: 2.1, z: -0.6 } },
-    { sectionId: 'proyectos', label: 'Proyectos', anchor: { x: -5.11, y: 3.05, z: 2.44 } },
-    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: -5.54, y: 3.05, z: 3.11 } },
-    { sectionId: 'laboratorio', label: 'Laboratorio', anchor: { x: -5.97, y: 3.05, z: 3.78 } },
-    { sectionId: 'contacto', label: 'Contacto', anchor: { x: -3.1, y: 2.55, z: 2.2 } },
+    { sectionId: 'proyectos', label: 'Proyectos', anchor: { x: 0.8, y: 6.3, z: 0.85 } },
+    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: 0, y: 6.3, z: 0.85 } },
+    { sectionId: 'laboratorio', label: 'Laboratorio', anchor: { x: -0.8, y: 6.3, z: 0.85 } },
+    { sectionId: 'contacto', label: 'Contacto', anchor: { x: -4.2, y: 2.65, z: 0.9 } },
   ];
-  private static readonly VENDING: Placement = { position: { x: 3.55, y: 0, z: 0.05 }, rotationY: -0.42 };
+  private static readonly VENDING: Placement = { position: { x: 3.55, y: 0.1, z: 0.05 }, rotationY: -0.42 };
   private static readonly SHOWCASE_SECTION = 'tecnologias';
   private static readonly CONTACT_SECTION = 'contacto';
   private static readonly TIMELINE_SECTION = 'experiencia';
@@ -108,6 +116,7 @@ export class DioramaScene {
     sideSign: 3.45,
     vending: 3.75,
     phone: 3.6,
+    signal: 1.2,
     electronics: 4.1,
     workshop: 4.25,
     workshopSign: 4.45,
@@ -125,7 +134,7 @@ export class DioramaScene {
   public oscilloscope: Oscilloscope | null = null;
   public phoneBooth: PhoneBooth | null = null;
   public breakerPanel: BreakerPanel | null = null;
-  public streetLine: SwitchedLine | null = null;
+  public readonly grid = new PowerGrid();
   public workbench: Workbench | null = null;
   public workshopDevices: WorkshopDevice[] = [];
 
@@ -242,6 +251,7 @@ export class DioramaScene {
     this.buildStreet();
     this.buildWorkshop();
     this.buildMarkers();
+    this.updatables.push(this.grid);
     this.objects.forEach((object) => scene.add(object.create()));
     this.luminous.forEach((object) => {
       object.enableLayer(RenderLayer.Reflected);
@@ -283,6 +293,7 @@ export class DioramaScene {
    */
   private buildEnvironment(): void {
     this.register(new Island(this.materials, this.random));
+    this.register(new Sidewalk(this.materials));
     this.register(new StreetMarkings(this.textures, this.random));
     this.register(new ContactShadows(this.textures));
     this.puddles = this.animate(new Puddles(this.quality.reflections, this.random));
@@ -301,7 +312,7 @@ export class DioramaScene {
    */
   private buildStall(): void {
     this.register(new Stall(this.materials));
-    this.power(
+    this.feed(
       new StallInterior(this.materials, this.textures),
       DioramaScene.TIMELINE.interior,
       PowerMode.Fade,
@@ -316,7 +327,7 @@ export class DioramaScene {
       const lantern = this.glow(
         this.animate(new Lantern(this.materials, this.textures, anchor, glyph, phase)),
       );
-      this.power(lantern, at, PowerMode.Fade);
+      this.feed(lantern, at, PowerMode.Fade);
     });
   }
 
@@ -327,7 +338,7 @@ export class DioramaScene {
     this.animate(new KitchenProps(this.materials, this.random));
     this.animate(new Chef());
     this.animate(new Juan());
-    this.power(
+    this.feed(
       this.glow(this.animate(new StringLights(this.materials))),
       DioramaScene.TIMELINE.interior,
       PowerMode.Fade,
@@ -339,8 +350,8 @@ export class DioramaScene {
    */
   private buildCounter(): void {
     this.mainSign = this.glow(this.animate(this.createMainSign()));
-    this.power(this.mainSign, DioramaScene.TIMELINE.mainSign, PowerMode.Strike);
-    this.power(
+    this.feed(this.mainSign, DioramaScene.TIMELINE.mainSign, PowerMode.Strike);
+    this.feed(
       this.glow(this.animate(this.createSideSign())),
       DioramaScene.TIMELINE.sideSign,
       PowerMode.Strike,
@@ -369,16 +380,14 @@ export class DioramaScene {
   }
 
   /**
-   * Calle: poste con farola (detrás del MAIN del tablero), tablero de la trayectoria, máquina expendedora y
-   * cabina telefónica.
+   * Calle: poste con farola (detrás del MAIN del tablero), tablero de la trayectoria, máquina expendedora,
+   * cabina telefónica y semáforo de la esquina.
    */
   private buildStreet(): void {
     const pole = this.glow(this.register(new UtilityPole(this.materials)));
     const cone = this.register(new LightCone());
-    this.streetLine = new SwitchedLine(new PowerGroup(pole, cone));
-    this.updatables.push(this.streetLine);
     this.powerSteps.push({
-      target: this.streetLine,
+      target: this.grid.feed(new PowerGroup(pole, cone)),
       at: DioramaScene.TIMELINE.street,
       mode: PowerMode.Strike,
     });
@@ -389,6 +398,19 @@ export class DioramaScene {
       this.animate(new PhoneBooth(this.materials, this.textures, PayPhoneService.KEYS)),
     );
     this.power(this.phoneBooth, DioramaScene.TIMELINE.phone, PowerMode.Strike);
+    this.buildSignal();
+  }
+
+  /**
+   * Semáforo de la esquina, con su aviso sonoro de cruce.
+   */
+  private buildSignal(): void {
+    const signal = this.glow(this.animate(new TrafficSignal(this.textures)));
+    const sound = new CrossingSound(this.audio);
+    signal.onChirp(() => {
+      sound.chirp();
+    });
+    this.feed(signal, DioramaScene.TIMELINE.signal, PowerMode.Strike);
   }
 
   /**
@@ -405,11 +427,13 @@ export class DioramaScene {
   }
 
   /**
-   * Taller de electrónica en la esquina derecha: el local, su letrero, el banco de pruebas de los proyectos y el
-   * osciloscopio con la placa del PID.
+   * Taller de electrónica en el segundo piso del ramen: la base sobre el techo, la escalera, el local, su
+   * letrero, el banco de pruebas de los proyectos y el osciloscopio con la placa del PID.
    */
   private buildWorkshop(): void {
     const { workshop, workshopSign } = DioramaScene.TIMELINE;
+    this.register(new ShopPlinth(this.materials));
+    this.register(new ShopStairs());
     this.power(new RepairShop(this.materials, this.textures), workshop, PowerMode.Fade);
     this.power(this.glow(this.animate(this.createWorkshopSign())), workshopSign, PowerMode.Strike);
     const ids = {
@@ -421,6 +445,20 @@ export class DioramaScene {
     this.power(this.workbench, workshop, PowerMode.Fade);
     this.buildLab();
     this.buildDevices();
+    this.buildSolar();
+  }
+
+  /**
+   * Respaldo solar del taller: paneles en el techo y controlador con baterías, que se entera cuando la red de
+   * la calle se corta (el MAIN del poste) y pasa al inversor.
+   */
+  private buildSolar(): void {
+    this.register(new SolarArray(this.materials, this.textures));
+    const controller = this.animate(new SolarController(this.materials, this.textures));
+    this.power(controller, DioramaScene.TIMELINE.workshop, PowerMode.Fade);
+    this.grid.onChange((closed) => {
+      controller.setGrid(closed);
+    });
   }
 
   /**
@@ -561,6 +599,21 @@ export class DioramaScene {
       this.register(object);
     }
     this.powerSteps.push({ target: object, at, mode });
+  }
+
+  /**
+   * Registra una pieza que cuelga de la red de la calle: se enciende en la intro a través de su línea y se apaga
+   * cuando el MAIN del poste corta la red.
+   *
+   * @param object Pieza encendible.
+   * @param at Segundo de la intro.
+   * @param mode Forma de encendido.
+   */
+  private feed(object: SceneObject & Powerable, at: number, mode: PowerMode): void {
+    if (!this.objects.includes(object)) {
+      this.register(object);
+    }
+    this.powerSteps.push({ target: this.grid.feed(object), at, mode });
   }
 
   /**
