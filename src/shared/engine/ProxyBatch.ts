@@ -7,6 +7,7 @@ import {
   type MeshBasicMaterial,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import type { ProxyAtlas } from './ProxyAtlas';
 import type { ProxyEntry } from './ProxyEntry';
 import type { ProxyKind } from './ProxyKind';
 import { ProxyShader } from './ProxyShader';
@@ -33,14 +34,16 @@ export class ProxyBatch {
    *
    * @param kind Tipo de lote.
    * @param sources Mallas originales (misma clave), con sus matrices del mundo al día.
+   * @param atlas Atlas con las texturas de color de las mallas (si las tienen distintas), o `null`.
    */
   public constructor(
     private readonly kind: ProxyKind,
     sources: readonly Mesh[],
+    private readonly atlas: ProxyAtlas | null = null,
   ) {
     this.current = new Float32Array(kind === 'lit' ? ProxyBatch.LIT_STRIDE : ProxyBatch.BASIC_STRIDE);
     this.entries = ProxyBatch.group(sources, this.current.length);
-    this.mesh = new Mesh(this.geometry(sources), ProxyBatch.material(kind, sources));
+    this.mesh = new Mesh(this.geometry(sources), this.material(sources));
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrixWorldAutoUpdate = false;
     this.sync(true);
@@ -70,6 +73,7 @@ export class ProxyBatch {
   public dispose(): void {
     this.mesh.geometry.dispose();
     (this.mesh.material as Material).dispose();
+    this.atlas?.texture.dispose();
   }
 
   /**
@@ -103,11 +107,30 @@ export class ProxyBatch {
     const attribute = (size: number): BufferAttribute =>
       new BufferAttribute(new Float32Array(count * size), size);
     part.setAttribute('color', attribute(ProxyBatch.RGB));
+    this.remap(part, mesh);
     if (this.kind === 'lit') {
       part.setAttribute('proxyEmissive', attribute(ProxyBatch.RGB));
       part.setAttribute('proxyRoughMetal', attribute(ProxyBatch.PAIR));
     }
     return part;
+  }
+
+  /**
+   * Lleva las coordenadas de textura de una malla a su rincón del atlas.
+   *
+   * @param part Geometría copiada.
+   * @param mesh Malla original (su material dice qué textura usa).
+   */
+  private remap(part: BufferGeometry, mesh: Mesh): void {
+    const map = (mesh.material as MeshBasicMaterial).map;
+    if (!this.atlas || !map) {
+      return;
+    }
+    const rect = this.atlas.uvRect(map);
+    const uv = part.getAttribute('uv') as BufferAttribute;
+    for (let index = 0; index < uv.count; index += 1) {
+      uv.setXY(index, rect.u + uv.getX(index) * rect.width, rect.v + uv.getY(index) * rect.height);
+    }
   }
 
   /**
@@ -167,6 +190,25 @@ export class ProxyBatch {
   }
 
   /**
+   * Material del lote, copiado del primer material del grupo (con el atlas como textura, si hay).
+   *
+   * @param sources Mallas originales.
+   * @returns Material del lote.
+   */
+  private material(sources: readonly Mesh[]): Material {
+    const template = sources[0]?.material as Material;
+    const shader = new ProxyShader();
+    const material =
+      this.kind === 'lit'
+        ? shader.lit(template as MeshStandardMaterial)
+        : shader.basic(template as MeshBasicMaterial);
+    if (this.atlas) {
+      (material as MeshBasicMaterial).map = this.atlas.texture;
+    }
+    return material;
+  }
+
+  /**
    * Agrupa las mallas por material, con el rango de vértices que ocupa cada una en la geometría unida.
    *
    * @param sources Mallas originales, en el orden en que se unen.
@@ -185,20 +227,5 @@ export class ProxyBatch {
       start += count;
     });
     return [...entries.values()];
-  }
-
-  /**
-   * Material del lote, copiado del primer material del grupo.
-   *
-   * @param kind Tipo de lote.
-   * @param sources Mallas originales.
-   * @returns Material del lote.
-   */
-  private static material(kind: ProxyKind, sources: readonly Mesh[]): Material {
-    const template = sources[0]?.material as Material;
-    const shader = new ProxyShader();
-    return kind === 'lit'
-      ? shader.lit(template as MeshStandardMaterial)
-      : shader.basic(template as MeshBasicMaterial);
   }
 }

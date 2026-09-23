@@ -1,4 +1,5 @@
 import { DoubleSide, Light, Mesh, MeshStandardMaterial, type Material, type Scene } from 'three';
+import { GroupCompactor } from '@shared/engine/GroupCompactor';
 import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { SceneObject } from '@shared/engine/SceneObject';
 
@@ -11,6 +12,7 @@ import type { SceneObject } from '@shared/engine/SceneObject';
  *   dos pasadas cambiarían de variante de shader dos veces por frame).
  * - Los materiales transparentes de doble cara se dibujan en una sola pasada (three.js los dibuja dos veces y
  *   revisa su shader en cada una); aquí todos son planos, vidrios casi invisibles o luz aditiva.
+ * - Las mallas con varios materiales dibujan una sola vez cada material ({@link GroupCompactor}).
  * - Las piezas que no se animan se congelan: sus mallas se unen por material y sus matrices quedan fijas.
  */
 export class RenderTuning {
@@ -44,16 +46,19 @@ export class RenderTuning {
   }
 
   /**
-   * Luces visibles para el espejo y transparencias en una sola pasada, nodo por nodo.
+   * Luces visibles para el espejo, grupos de materiales repetidos compactados y transparencias en una sola
+   * pasada, nodo por nodo.
    *
    * @param scene Escena.
    */
   private static tuneNodes(scene: Scene): void {
+    const compactor = new GroupCompactor();
     scene.traverse((object) => {
       if (object instanceof Light) {
         object.layers.enable(RenderLayer.Reflected);
       }
       if (object instanceof Mesh) {
+        compactor.compact(object as Mesh);
         RenderTuning.singlePass(object.material as Material | Material[]);
       }
     });

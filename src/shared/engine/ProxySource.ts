@@ -12,6 +12,8 @@ export interface ProxySource {
   readonly material: Material;
   /** Textura de color al copiarla. */
   readonly map: Texture | null;
+  /** Versión de esa textura al copiarla (cambia si se redibuja). */
+  readonly version: number;
   /** Visibilidad al copiarla. */
   readonly visible: boolean;
 }

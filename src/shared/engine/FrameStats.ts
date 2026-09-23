@@ -19,7 +19,8 @@ export class FrameStats {
   private static readonly UNMASKED_RENDERER = 0x9246;
 
   private readonly gl: WebGL2RenderingContext;
-  private readonly timer: boolean;
+  private timer = false;
+  private enabled = false;
   private readonly pending: WebGLQuery[] = [];
   private readonly free: WebGLQuery[] = [];
   private active: WebGLQuery | null = null;
@@ -34,14 +35,25 @@ export class FrameStats {
    */
   public constructor(private readonly renderer: WebGLRenderer) {
     this.gl = renderer.getContext() as WebGL2RenderingContext;
+  }
+
+  /**
+   * Activa la medición. Apagada no cuesta nada: consultar el cronómetro de la GPU es una llamada sincrónica
+   * al proceso de la GPU, así que solo se hace mientras el medidor está en pantalla.
+   */
+  public enable(): void {
+    this.enabled = true;
     this.timer = this.gl.getExtension(FrameStats.TIMER_EXTENSION) !== null;
-    renderer.info.autoReset = false;
+    this.renderer.info.autoReset = false;
   }
 
   /**
    * Empieza un frame dibujado (antes de la lógica).
    */
   public beginFrame(): void {
+    if (!this.enabled) {
+      return;
+    }
     this.started = performance.now();
   }
 
@@ -49,6 +61,9 @@ export class FrameStats {
    * Empieza el trabajo de GPU del frame (antes del primer render).
    */
   public beginGpu(): void {
+    if (!this.enabled) {
+      return;
+    }
     this.renderer.info.reset();
     this.collect();
     if (!this.timer || this.active) {
@@ -66,6 +81,9 @@ export class FrameStats {
    * Termina el trabajo de GPU del frame (después del último render).
    */
   public endGpu(): void {
+    if (!this.enabled) {
+      return;
+    }
     if (this.timer && this.active) {
       this.gl.endQuery(FrameStats.TIME_ELAPSED);
       this.pending.push(this.active);
@@ -80,6 +98,9 @@ export class FrameStats {
    * Termina un frame dibujado (después del render).
    */
   public endFrame(): void {
+    if (!this.enabled) {
+      return;
+    }
     const now = performance.now();
     this.averages.cpu = this.smooth(this.averages.cpu, now - this.started);
     if (this.lastEnd > 0) {

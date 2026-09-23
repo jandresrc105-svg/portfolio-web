@@ -109,6 +109,7 @@ export class DioramaExperience {
    * @returns Medición.
    */
   public get perf(): PerfSnapshot {
+    this.stage.stats.enable();
     return this.stage.stats.snapshot();
   }
 

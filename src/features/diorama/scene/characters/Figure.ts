@@ -14,6 +14,7 @@ import {
   type Vector3Like,
 } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
+import { GeometryBatcher } from '@shared/engine/GeometryBatcher';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { FigureJoints } from './FigureJoints';
@@ -135,6 +136,7 @@ export abstract class Figure extends SceneObject implements Updatable {
     this.dress();
     this.root.position.copy(this.options.placement.position);
     this.root.rotation.y = this.options.placement.rotationY;
+    this.settleJoints();
   }
 
   /**
@@ -229,6 +231,22 @@ export abstract class Figure extends SceneObject implements Updatable {
     this.swing.setFromUnitVectors(this.current, this.desired);
     joint.parent?.getWorldQuaternion(this.parent).invert();
     joint.quaternion.copy(this.parent.multiply(this.swing).multiply(this.world));
+  }
+
+  /**
+   * Une las mallas que cuelgan directamente de cada articulación (y de la raíz) y comparten material: entre sí
+   * no se mueven, solo gira la articulación. Los grupos hijos (otras articulaciones, accesorios que se mueven)
+   * quedan como están.
+   */
+  private settleJoints(): void {
+    this.root.updateMatrixWorld(true);
+    const batcher = new GeometryBatcher();
+    [this.root, ...this.posable].forEach((joint) => {
+      batcher.batch(
+        joint,
+        joint.children.filter((child) => !(child instanceof Mesh)),
+      );
+    });
   }
 
   /**

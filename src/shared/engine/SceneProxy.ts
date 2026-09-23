@@ -8,6 +8,7 @@ import {
   type Scene,
   type Texture,
 } from 'three';
+import { ProxyAtlas } from './ProxyAtlas';
 import { ProxyBatch } from './ProxyBatch';
 import { ProxyCover } from './ProxyCover';
 import { ProxyKey } from './ProxyKey';
@@ -34,6 +35,7 @@ export class SceneProxy implements Updatable {
   private static readonly REASON = 'proxy';
   private static readonly CHECK_EVERY = 30;
   private static readonly QUIET_CHECKS = 3;
+  private static readonly ATLAS = { scale: 0.5, size: 4096 };
 
   private readonly group = new Group();
   private readonly keys = new ProxyKey();
@@ -175,14 +177,72 @@ export class SceneProxy implements Updatable {
     if (meshes.length < 2) {
       return;
     }
+    const [first] = meshes;
+    if (first && this.keys.atlased(first)) {
+      this.chunks(meshes).forEach((chunk) => {
+        this.batch(
+          kind,
+          chunk,
+          new ProxyAtlas(this.texturesOf(chunk), SceneProxy.ATLAS.scale, SceneProxy.ATLAS.size),
+        );
+      });
+      return;
+    }
+    this.batch(kind, meshes, null);
+  }
+
+  /**
+   * Parte un grupo de mallas con textura en tandas cuyas texturas quepan en un atlas.
+   *
+   * @param meshes Mallas del grupo.
+   * @returns Tandas.
+   */
+  private chunks(meshes: Mesh[]): Mesh[][] {
+    const chunks: Mesh[][] = [[]];
+    meshes.forEach((mesh) => {
+      const current = chunks[chunks.length - 1] ?? [];
+      const textures = this.texturesOf([...current, mesh]);
+      if (current.length > 0 && !ProxyAtlas.fits(textures, SceneProxy.ATLAS.scale, SceneProxy.ATLAS.size)) {
+        chunks.push([mesh]);
+      } else {
+        current.push(mesh);
+      }
+    });
+    return chunks;
+  }
+
+  /**
+   * Texturas de color (sin repetir) de unas mallas.
+   *
+   * @param meshes Mallas.
+   * @returns Texturas.
+   */
+  private texturesOf(meshes: readonly Mesh[]): Texture[] {
+    const maps = meshes.map((mesh) => SceneProxy.mapOf(mesh.material as Material));
+    return [...new Set(maps.filter((map): map is Texture => map !== null))];
+  }
+
+  /**
+   * Crea un lote y guarda cómo estaban sus originales.
+   *
+   * @param kind Tipo de lote.
+   * @param meshes Mallas originales.
+   * @param atlas Atlas de sus texturas, o `null`.
+   */
+  private batch(kind: ProxyKind, meshes: Mesh[], atlas: ProxyAtlas | null): void {
+    if (meshes.length < 2) {
+      atlas?.texture.dispose();
+      return;
+    }
     try {
-      const batch = new ProxyBatch(kind, meshes);
+      const batch = new ProxyBatch(kind, meshes, atlas);
       this.batches.push(batch);
       this.group.add(batch.mesh);
       meshes.forEach((mesh) => {
         const material = mesh.material as Material;
         const map = SceneProxy.mapOf(material);
-        this.sources.push({ mesh, matrix: mesh.matrixWorld.clone(), material, map, visible: mesh.visible });
+        const matrix = mesh.matrixWorld.clone();
+        this.sources.push({ mesh, matrix, material, map, version: map?.version ?? 0, visible: mesh.visible });
       });
     } catch {
       return;
@@ -244,9 +304,10 @@ export class SceneProxy implements Updatable {
    * @returns `true` si cambió.
    */
   private differs(source: ProxySource): boolean {
-    const { mesh, matrix, material, map, visible } = source;
+    const { mesh, matrix, material, map, version, visible } = source;
     const current = mesh.material as Material;
-    if (current !== material || SceneProxy.mapOf(current) !== map) {
+    const texture = SceneProxy.mapOf(current);
+    if (current !== material || texture !== map || (texture?.version ?? 0) !== version) {
       return true;
     }
     const hid = mesh.visible !== visible && !this.cover.hides(mesh);
