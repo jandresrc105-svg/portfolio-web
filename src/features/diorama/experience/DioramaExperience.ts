@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import { SeededRandom } from '@shared/core/math/SeededRandom';
 import { AdaptiveResolution } from '@shared/engine/AdaptiveResolution';
 import { PointerPicker } from '@shared/engine/PointerPicker';
@@ -10,20 +11,22 @@ import { AudibleSwitch } from '../audio/AudibleSwitch';
 import type { Soundscape } from '../audio/Soundscape';
 import { CameraDirector } from '../camera/CameraDirector';
 import { PowerOnSequence } from '../intro/PowerOnSequence';
+import type { DioramaDevices } from '../models/DioramaDevices';
 import type { Hotspot } from '../models/Hotspot';
 import type { ScopeControlId } from '../models/ScopeControlId';
 import { PowerMode } from '../models/PowerMode';
 import type { PowerStep } from '../models/PowerStep';
 import type { Weather } from '../models/Weather';
-import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from '../scene/CanvasTextureFactory';
 import { DioramaScene } from '../scene/DioramaScene';
 import { MaterialLibrary } from '../scene/MaterialLibrary';
 import { NeonEnvironment } from '../scene/NeonEnvironment';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
+import { PhoneInteraction } from './PhoneInteraction';
 
 /**
- * Orquesta la experiencia 3D (patrón Facade): escenario, diorama, cámara, bucle, intro, sonido e interacción.
+ * Orquesta la experiencia 3D (patrón Facade): escenario, diorama, cámara, bucle, intro, sonido e interacción
+ * (marcadores, latas, osciloscopio y teléfono).
  * El componente DOM solo le pasa eventos, tamaños y a qué parada del recorrido ir; el arrastre, la rueda y
  * los gestos táctiles sobre el canvas los maneja directamente {@link CameraDirector}.
  */
@@ -39,6 +42,8 @@ export class DioramaExperience {
   private readonly controls = new PointerPicker<ScopeControlId>();
   private readonly resolution: AdaptiveResolution;
   private readonly focus = new Vector3();
+  private phone: PhoneInteraction | null = null;
+  private call: ((channel: ContactChannel) => void) | null = null;
   private hovered: HotspotMarker | null = null;
   private hoveredItem: number | null = null;
   private hoveredControl: ScopeControlId | null = null;
@@ -52,17 +57,18 @@ export class DioramaExperience {
    *
    * @param canvas Canvas donde se dibuja.
    * @param quality Perfil de calidad.
-   * @param instrument Tablero del osciloscopio (lazo PID y estado del equipo).
+   * @param devices Osciloscopio y teléfono que el visitante usa.
    * @param sound Paisaje sonoro.
    * @param weather Clima de la escena.
    */
   public constructor(
     canvas: HTMLCanvasElement,
     quality: QualityProfile,
-    private readonly instrument: ScopeControlService,
+    private readonly devices: DioramaDevices,
     private readonly sound: Soundscape,
     weather: Weather,
   ) {
+    const { instrument } = devices;
     const random = new SeededRandom(DioramaExperience.SEED);
     this.stage = new Stage(canvas, quality);
     const textures = new CanvasTextureFactory(random, this.stage.maxAnisotropy, quality.textureScale);
@@ -110,9 +116,10 @@ export class DioramaExperience {
       this.controls.register(hitArea, id);
     });
     this.focusShowcase();
+    this.connectPhone();
     this.connectSound();
     this.diorama.puddles?.reflectOnly(this.stage.camera, RenderLayer.Reflected);
-    this.loop.add(this.director, this.resolution, this.sound, ...this.diorama.updatables);
+    this.loop.add(this.director, this.resolution, this.sound, this.devices.phone, ...this.diorama.updatables);
     this.resize(width, height);
     await this.stage.warmUp();
     this.loop.start();
@@ -139,6 +146,7 @@ export class DioramaExperience {
   public travelTo(stop: number): void {
     this.stop = stop;
     this.director.travelTo(stop);
+    this.phone?.setActive(stop === this.diorama.contactStop);
   }
 
   /**
@@ -150,6 +158,7 @@ export class DioramaExperience {
   public setPointer(x: number, y: number): void {
     this.picker.setPointer(x, y);
     this.controls.setPointer(x, y);
+    this.phone?.setPointer(x, y);
   }
 
   /**
@@ -177,7 +186,7 @@ export class DioramaExperience {
    * @returns Texto.
    */
   public controlLabel(id: ScopeControlId): string {
-    return this.instrument.describe(id);
+    return this.devices.instrument.describe(id);
   }
 
   /**
@@ -193,12 +202,12 @@ export class DioramaExperience {
     }
     this.holding = true;
     this.director.lockRotation(true);
-    const apply = this.instrument.grab(id);
+    const apply = this.devices.instrument.grab(id);
     if (apply) {
       this.turning = { id, apply };
       this.sound.select();
     } else {
-      this.instrument.press(id);
+      this.devices.instrument.press(id);
       this.diorama.oscilloscope?.pressKey(id);
       this.sound.click();
     }
@@ -301,6 +310,58 @@ export class DioramaExperience {
   }
 
   /**
+   * Detecta el control del teléfono bajo el puntero (solo con la sección de contacto abierta y sin un
+   * marcador delante) y lo resalta.
+   *
+   * @returns Texto del tooltip del control señalado o `null`.
+   */
+  public hoverPhone(): string | null {
+    const enabled = this.interactive && this.hovered === null && this.stop === this.diorama.contactStop;
+    return this.phone?.hover(this.stage.camera, enabled) ?? null;
+  }
+
+  /**
+   * Usa el control del teléfono señalado: descolgar, marcar o reabrir el canal.
+   *
+   * @returns `true` si se usó un control.
+   */
+  public pressPhone(): boolean {
+    return this.hoverPhone() !== null && (this.phone?.press() ?? false);
+  }
+
+  /**
+   * Marca una tecla del teléfono desde el teclado físico, si la sección de contacto está abierta.
+   *
+   * @param key Tecla (`0`…`9`, `*`, `#`).
+   * @returns `true` si se marcó.
+   */
+  public dialPhone(key: string): boolean {
+    if (!this.interactive || this.stop !== this.diorama.contactStop) {
+      return false;
+    }
+    this.phone?.dial(key);
+    return true;
+  }
+
+  /**
+   * Fija los canales del marcado rápido del teléfono.
+   *
+   * @param channels Canales en orden (la tecla `1` llama al primero).
+   */
+  public setContacts(channels: readonly ContactChannel[]): void {
+    this.devices.phone.setChannels(channels);
+  }
+
+  /**
+   * Define qué hacer cuando una llamada del teléfono conecta.
+   *
+   * @param listener Función que recibe el canal a abrir.
+   */
+  public onCall(listener: (channel: ContactChannel) => void): void {
+    this.call = listener;
+  }
+
+  /**
    * Ajusta el render al nuevo tamaño.
    *
    * @param width Ancho del viewport.
@@ -316,6 +377,7 @@ export class DioramaExperience {
    */
   public dispose(): void {
     this.loop.stop();
+    this.phone?.dispose();
     this.director.dispose();
     this.sound.dispose();
     this.diorama.dispose();
@@ -330,6 +392,20 @@ export class DioramaExperience {
     if (vending) {
       this.director.setFocus(vending.focusPoint(this.focus), this.diorama.showcaseStop);
     }
+  }
+
+  /**
+   * Conecta el teléfono de la cabina con el puntero, el sonido y la apertura de canales.
+   */
+  private connectPhone(): void {
+    const booth = this.diorama.phoneBooth;
+    if (!booth) {
+      return;
+    }
+    this.phone = new PhoneInteraction(this.devices.phone, booth, this.sound);
+    this.phone.onCall((channel) => {
+      this.call?.(channel);
+    });
   }
 
   /**
@@ -386,7 +462,7 @@ export class DioramaExperience {
    */
   private controlUnderPointer(): ScopeControlId | null {
     const id = this.interactive && this.hovered === null ? this.controls.pick(this.stage.camera) : null;
-    return id !== null && this.instrument.available(id) ? id : null;
+    return id !== null && this.devices.instrument.available(id) ? id : null;
   }
 
   /**

@@ -21,7 +21,7 @@ export class CameraDirector implements Updatable {
     { position: { x: 2.88, y: 1.35, z: 2.72 }, target: { x: 3.05, y: 1.08, z: 0.32 } },
     { position: { x: -0.84, y: 1.44, z: 1.62 }, target: { x: -1.28, y: 1.14, z: 0.82 } },
     { position: { x: -4.6, y: 2.3, z: 3.2 }, target: { x: -2.7, y: 1.5, z: -1 } },
-    { position: { x: 0.2, y: 1.55, z: 5.4 }, target: { x: -3.2, y: 1.05, z: 1.9 } },
+    { position: { x: -2.89, y: 1.45, z: 3.22 }, target: { x: -3.41, y: 1.3, z: 1.97 } },
   ];
   private static readonly CONTROLS = { damping: 0.06, rotateSpeed: 0.9, zoomSpeed: 0.8 };
   private static readonly TRAVEL = { duration: 1.6, ease: 'power2.inOut', lift: 0.12, maxLift: 1.4 };

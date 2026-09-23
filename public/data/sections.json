@@ -216,8 +216,10 @@
     "title": "¿Hablamos?",
     "align": "left",
     "paragraphs": [
-      "Si tienes un proyecto, una vacante o simplemente quieres hablar de 3D, control o ramen, deja un mensaje en el buzón."
+      "Si tienes un proyecto, una vacante o simplemente quieres hablar de 3D, control o ramen, llámame.",
+      "Descuelga el teléfono de la cabina y marca: cada número de la tarjeta de marcado rápido abre un canal."
     ],
+    "phone": true,
     "links": [
       {
         "label": "GitHub",
@@ -228,8 +230,8 @@
         "href": "https://www.linkedin.com/"
       },
       {
-        "label": "Correo",
-        "href": "mailto:tu-correo@ejemplo.com"
+        "label": "Gmail",
+        "href": "https://mail.google.com/mail/?view=cm&fs=1&to=tu-correo@ejemplo.com"
       }
     ]
   }

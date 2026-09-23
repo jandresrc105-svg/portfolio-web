@@ -1,13 +1,15 @@
 import { Component } from '@shared/core/component/Component';
 import { ElementBuilder } from '@shared/core/dom/ElementBuilder';
 import type { AppEventBus } from '@shared/core/events/AppEventBus';
+import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import type { SectionNavigator } from '@shared/core/navigation/SectionNavigator';
 import type { DioramaExperience } from '../experience/DioramaExperience';
 import type { DioramaExperienceFactory } from '../experience/DioramaExperienceFactory';
 import type { DioramaOverlays } from './DioramaOverlays';
 
 /**
- * Escena 3D a pantalla completa. Maneja el canvas, el tooltip y los clics sobre marcadores y latas; el
+ * Escena 3D a pantalla completa. Maneja el canvas, el tooltip, los clics sobre marcadores, latas y el
+ * teléfono (y los números del teclado físico, que marcan en la sección de contacto); el
  * giro, la rueda y los gestos táctiles los atiende la cámara de {@link DioramaExperience}. Cada cambio de
  * sección del {@link SectionNavigator} lleva la cámara a su parada.
  */
@@ -17,6 +19,8 @@ export class DioramaComponent extends Component {
   private static readonly DRAG_THRESHOLD = 6;
   private static readonly DRAGGING_CLASS = 'is-dragging';
   private static readonly TUNING_CLASS = 'is-tuning';
+  private static readonly DIAL_KEY = /^[0-9*#]$/;
+  private static readonly CALL_FEATURES = 'noopener,noreferrer';
 
   private readonly canvas = ElementBuilder.create('canvas')
     .classes('diorama__canvas')
@@ -36,6 +40,7 @@ export class DioramaComponent extends Component {
   private suppressClick = false;
   private item = 0;
   private showcaseCans: readonly string[] = [];
+  private contacts: readonly ContactChannel[] = [];
   private readonly subscriptions: (() => void)[] = [];
 
   /**
@@ -86,6 +91,9 @@ export class DioramaComponent extends Component {
     });
     this.bindPointer();
     this.bindShowcase();
+    this.listenWindow('keydown', (event) => {
+      this.dial(event);
+    });
   }
 
   /**
@@ -134,7 +142,27 @@ export class DioramaComponent extends Component {
         this.showcaseCans = cans;
         this.experience?.setItems(cans);
       }),
+      this.events.on('contactChannels', (channels) => {
+        this.contacts = channels;
+        this.experience?.setContacts(channels);
+      }),
     );
+  }
+
+  /**
+   * Marca en el teléfono de la escena el número pulsado en el teclado físico (solo en la sección de
+   * contacto y fuera de los campos de texto).
+   *
+   * @param event Evento de teclado.
+   */
+  private dial(event: KeyboardEvent): void {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!DioramaComponent.DIAL_KEY.test(event.key) || target?.closest('input, textarea')) {
+      return;
+    }
+    if (this.experience?.dialPhone(event.key)) {
+      event.preventDefault();
+    }
   }
 
   /**
@@ -171,6 +199,10 @@ export class DioramaComponent extends Component {
     experience.travelTo(this.navigator.position);
     experience.setItems(this.showcaseCans);
     experience.showItem(this.item);
+    experience.setContacts(this.contacts);
+    experience.onCall((channel) => {
+      window.open(channel.href, '_blank', DioramaComponent.CALL_FEATURES);
+    });
   }
 
   /**
@@ -299,8 +331,8 @@ export class DioramaComponent extends Component {
   }
 
   /**
-   * Texto del tooltip para lo que está bajo el puntero: un marcador, una lata de la vitrina o un control del
-   * osciloscopio (en ese orden).
+   * Texto del tooltip para lo que está bajo el puntero: un marcador, una lata de la vitrina, un control del
+   * osciloscopio o uno del teléfono (en ese orden).
    *
    * @param experience Experiencia 3D.
    * @returns Texto o `null` si no se señala nada interactivo.
@@ -309,13 +341,14 @@ export class DioramaComponent extends Component {
     const hotspot = experience.hover();
     const item = experience.hoverItem();
     const control = experience.hoverControl();
+    const phone = experience.hoverPhone();
     if (hotspot) {
       return hotspot.label;
     }
     if (item !== null) {
       return experience.itemName(item);
     }
-    return control === null ? null : experience.controlLabel(control);
+    return control === null ? phone : experience.controlLabel(control);
   }
 
   /**
@@ -336,8 +369,8 @@ export class DioramaComponent extends Component {
   }
 
   /**
-   * Activa lo que está bajo el puntero: un marcador lleva a su sección y una lata la elige en la vitrina
-   * y lleva a la sección de la vitrina.
+   * Activa lo que está bajo el puntero: un marcador lleva a su sección, una lata la elige en la vitrina
+   * y lleva a la sección de la vitrina, y un control del teléfono se usa.
    *
    * @param experience Experiencia 3D.
    */
@@ -351,6 +384,8 @@ export class DioramaComponent extends Component {
       experience.select();
       this.events.emit('showcasePicked', item);
       this.navigator.go(experience.showcaseSection);
+    } else {
+      experience.pressPhone();
     }
   }
 }

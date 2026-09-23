@@ -25,4 +25,6 @@ export interface Section {
   readonly showcase?: boolean;
   /** Muestra el panel para sintonizar en vivo el PID del osciloscopio. */
   readonly tuner?: boolean;
+  /** Sus enlaces son el marcado rápido del teléfono de la escena (el primero es la tecla 1). */
+  readonly phone?: boolean;
 }

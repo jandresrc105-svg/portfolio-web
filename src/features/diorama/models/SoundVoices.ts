@@ -1,6 +1,7 @@
 import type { AmbientLoop } from '../audio/AmbientLoop';
 import type { InterfaceSound } from '../audio/InterfaceSound';
 import type { NeonHum } from '../audio/NeonHum';
+import type { PhoneSound } from '../audio/PhoneSound';
 import type { Soundtrack } from '../audio/Soundtrack';
 import type { SwitchSound } from '../audio/SwitchSound';
 import type { ThunderSound } from '../audio/ThunderSound';
@@ -21,4 +22,6 @@ export interface SoundVoices {
   readonly thunder: ThunderSound;
   /** Sonidos de interfaz. */
   readonly ui: InterfaceSound;
+  /** Timbre, teclas y tonos del teléfono de la cabina. */
+  readonly phone: PhoneSound;
 }

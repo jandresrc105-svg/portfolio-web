@@ -10,6 +10,7 @@ import { DioramaComponent } from './components/DioramaComponent';
 import { SectionNavComponent } from './components/SectionNavComponent';
 import { SoundToggleComponent } from './components/SoundToggleComponent';
 import { DioramaExperienceFactory } from './experience/DioramaExperienceFactory';
+import { PayPhoneService } from './services/PayPhoneService';
 import { ScopeControlService } from './services/ScopeControlService';
 import { ScopeService } from './services/ScopeService';
 
@@ -33,6 +34,7 @@ export class DioramaModule implements FeatureModule {
   private static registerServices(container: Container): void {
     container
       .singleton(ScopeService, () => new ScopeService())
+      .singleton(PayPhoneService, () => new PayPhoneService())
       .singleton(
         ScopeControlService,
         (c) => new ScopeControlService(c.resolve(PidLoopService), c.resolve(ScopeService)),
@@ -42,7 +44,7 @@ export class DioramaModule implements FeatureModule {
         (c) =>
           new DioramaExperienceFactory(
             c.resolve(QualityDetector),
-            c.resolve(ScopeControlService),
+            { instrument: c.resolve(ScopeControlService), phone: c.resolve(PayPhoneService) },
             c.resolve(AudioEngine),
           ),
       );

@@ -8,6 +8,7 @@ import type { Hotspot } from '../models/Hotspot';
 import { PowerMode } from '../models/PowerMode';
 import type { PowerStep } from '../models/PowerStep';
 import type { Weather } from '../models/Weather';
+import { PayPhoneService } from '../services/PayPhoneService';
 import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from './CanvasTextureFactory';
 import { PowerGroup } from './PowerGroup';
@@ -31,7 +32,7 @@ import { Moonlight } from './objects/Moonlight';
 import { NeonSign } from './objects/NeonSign';
 import { Noren } from './objects/Noren';
 import { Oscilloscope } from './objects/Oscilloscope';
-import { Postbox } from './objects/Postbox';
+import { PhoneBooth } from './objects/PhoneBooth';
 import { Puddles } from './objects/Puddles';
 import { Rain } from './objects/Rain';
 import { RainSplashes } from './objects/RainSplashes';
@@ -56,9 +57,10 @@ export class DioramaScene {
     { sectionId: 'tecnologias', label: 'Tecnologías', anchor: { x: 3.55, y: 2.25, z: 0.35 } },
     { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: -1.2, y: 1.6, z: 0.8 } },
     { sectionId: 'experiencia', label: 'Experiencia', anchor: { x: -3.75, y: 2.1, z: -0.6 } },
-    { sectionId: 'contacto', label: 'Contacto', anchor: { x: -2.95, y: 1.6, z: 2.1 } },
+    { sectionId: 'contacto', label: 'Contacto', anchor: { x: -3.1, y: 2.55, z: 2.2 } },
   ];
   private static readonly SHOWCASE_SECTION = 'tecnologias';
+  private static readonly CONTACT_SECTION = 'contacto';
   private static readonly LANTERNS = [
     { anchor: { x: -2.35, y: 2.55, z: 1.62 }, glyph: '麺', phase: 0, at: 1.6 },
     { anchor: { x: 2.35, y: 2.55, z: 1.62 }, glyph: '灯', phase: 1.7, at: 1.95 },
@@ -87,6 +89,7 @@ export class DioramaScene {
     mainSign: 2.95,
     sideSign: 3.45,
     vending: 3.75,
+    phone: 3.6,
     electronics: 4.1,
     markers: 5.3,
     markerStagger: 0.12,
@@ -100,6 +103,7 @@ export class DioramaScene {
   public puddles: Puddles | null = null;
   public vending: VendingMachine | null = null;
   public oscilloscope: Oscilloscope | null = null;
+  public phoneBooth: PhoneBooth | null = null;
 
   private readonly objects: SceneObject[] = [];
   private readonly luminous: SceneObject[] = [];
@@ -160,6 +164,17 @@ export class DioramaScene {
   public get showcaseStop(): number {
     return (
       DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.SHOWCASE_SECTION) + 1
+    );
+  }
+
+  /**
+   * Parada del recorrido de la sección de contacto (la del teléfono).
+   *
+   * @returns Índice de la parada.
+   */
+  public get contactStop(): number {
+    return (
+      DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.CONTACT_SECTION) + 1
     );
   }
 
@@ -300,7 +315,7 @@ export class DioramaScene {
   }
 
   /**
-   * Calle: poste con farola, máquina expendedora y buzón.
+   * Calle: poste con farola, máquina expendedora y cabina telefónica.
    */
   private buildStreet(): void {
     const pole = this.glow(this.animate(new UtilityPole(this.materials)));
@@ -312,7 +327,10 @@ export class DioramaScene {
     });
     this.vending = this.glow(this.animate(new VendingMachine(this.textures)));
     this.power(this.vending, DioramaScene.TIMELINE.vending, PowerMode.Strike);
-    this.register(new Postbox(this.materials));
+    this.phoneBooth = this.glow(
+      this.animate(new PhoneBooth(this.materials, this.textures, PayPhoneService.KEYS)),
+    );
+    this.power(this.phoneBooth, DioramaScene.TIMELINE.phone, PowerMode.Strike);
   }
 
   /**

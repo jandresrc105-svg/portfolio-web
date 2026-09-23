@@ -13,7 +13,8 @@ import { ShowcaseComponent } from './ShowcaseComponent';
  * Una sección de contenido: tarjeta de vidrio con botón para volver a la vista general, texto, etiquetas,
  * elementos y enlaces.
  * Si la sección es una vitrina, sus elementos se recorren de uno en uno con {@link ShowcaseComponent}; si
- * tiene sintonizador, muestra {@link PidTunerComponent} antes de sus elementos.
+ * tiene sintonizador, muestra {@link PidTunerComponent} antes de sus elementos. Si es la del teléfono, sus
+ * enlaces son el marcado rápido: se numeran y se publican en `contactChannels` para la escena.
  */
 export class SectionComponent extends Component {
   private readonly showcase = ElementBuilder.create('div').classes('section__showcase').build();
@@ -68,12 +69,15 @@ export class SectionComponent extends Component {
    * @inheritdoc
    */
   protected override onMount(): void {
-    const { showcase, tuner, items = [] } = this.section;
+    const { showcase, tuner, phone, items = [], links = [] } = this.section;
     if (showcase && items.length > 0) {
       this.mountChild(new ShowcaseComponent(items, this.events), this.showcase);
     }
     if (tuner) {
       this.mountChild(new PidTunerComponent(this.loop), this.tuner);
+    }
+    if (phone) {
+      this.events.emit('contactChannels', links);
     }
   }
 
@@ -83,7 +87,7 @@ export class SectionComponent extends Component {
    * @returns Elemento de la tarjeta.
    */
   private card(): HTMLElement {
-    const { tags = [], items = [], links = [], showcase, tuner } = this.section;
+    const { tags = [], items = [], links = [], showcase, tuner, phone } = this.section;
     const body = showcase ? [this.showcase] : SectionComponent.itemList(items);
     const extras = tuner ? [this.tuner] : [];
     return ElementBuilder.create('article')
@@ -94,7 +98,7 @@ export class SectionComponent extends Component {
         ...ItemCard.tags(tags),
         ...extras,
         ...body,
-        ...SectionComponent.linkList(links),
+        ...SectionComponent.linkList(phone ? SectionComponent.speedDial(links) : links),
       )
       .build();
   }
@@ -130,6 +134,16 @@ export class SectionComponent extends Component {
         .children(...cards)
         .build(),
     ];
+  }
+
+  /**
+   * Antepone a cada enlace su tecla de marcado rápido ("1 · GitHub").
+   *
+   * @param links Enlaces en el orden del marcado rápido.
+   * @returns Enlaces con la tecla en el texto.
+   */
+  private static speedDial(links: readonly SectionLink[]): SectionLink[] {
+    return links.map((link, index) => ({ ...link, label: `${String(index + 1)} · ${link.label}` }));
   }
 
   /**

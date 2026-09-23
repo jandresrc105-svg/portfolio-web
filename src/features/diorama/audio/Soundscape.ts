@@ -1,12 +1,14 @@
 import { Vector3, type Camera, type Vector3Like } from 'three';
 import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { PhoneLine } from '../models/PhoneLine';
 import type { Powerable } from '../models/Powerable';
 import type { SoundVoices } from '../models/SoundVoices';
 import type { SoundtrackTrack } from '../models/SoundtrackTrack';
 import { AmbientLoop } from './AmbientLoop';
 import { InterfaceSound } from './InterfaceSound';
 import { NeonHum } from './NeonHum';
+import { PhoneSound } from './PhoneSound';
 import { Soundtrack } from './Soundtrack';
 import { SwitchSound } from './SwitchSound';
 import { ThunderSound } from './ThunderSound';
@@ -107,6 +109,32 @@ export class Soundscape implements Updatable {
   }
 
   /**
+   * Timbre del teléfono de la cabina.
+   */
+  public phoneRing(): void {
+    this.voices?.phone.ring();
+  }
+
+  /**
+   * Tono DTMF de una tecla del teléfono.
+   *
+   * @param row Fila de la tecla.
+   * @param column Columna de la tecla.
+   */
+  public phoneKey(row: number, column: number): void {
+    this.voices?.phone.key(row, column);
+  }
+
+  /**
+   * Tono de la línea del teléfono.
+   *
+   * @param line Tono.
+   */
+  public phoneLine(line: PhoneLine): void {
+    this.voices?.phone.setLine(line);
+  }
+
+  /**
    * Cancela la suscripción al motor de audio.
    */
   public dispose(): void {
@@ -147,6 +175,7 @@ export class Soundscape implements Updatable {
       switches: new SwitchSound(context, output),
       thunder: new ThunderSound(context, output),
       ui: new InterfaceSound(context, output),
+      phone: new PhoneSound(context, output),
     };
   }
 }
