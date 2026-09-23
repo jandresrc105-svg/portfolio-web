@@ -10,8 +10,8 @@ export class NeonHum implements Powerable {
     { frequency: 240, type: 'sine', gain: 0.3 },
     { frequency: 360, type: 'sine', gain: 0.18 },
   ];
-  private static readonly LOWPASS = 1400;
-  private static readonly VOLUME = 0.03;
+  private static readonly LOWPASS = 600;
+  private static readonly VOLUME = 0.012;
   private static readonly SMOOTHING = 0.025;
   private static readonly HEARING = { near: 2.5, far: 16 };
 
