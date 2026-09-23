@@ -8,6 +8,7 @@ import { LightZones } from '@shared/engine/LightZones';
 import { RenderGate } from '@shared/engine/RenderGate';
 import { PointerPicker } from '@shared/engine/PointerPicker';
 import { RenderLayer } from '@shared/engine/RenderLayer';
+import type { PerfSnapshot } from '@shared/engine/PerfSnapshot';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
 import { RenderLoop } from '@shared/engine/RenderLoop';
 import { Stage } from '@shared/engine/Stage';
@@ -99,7 +100,16 @@ export class DioramaExperience {
     this.resolution = new AdaptiveResolution(this.stage, quality, () => this.loop.resting);
     this.scheduler = new UpdateScheduler(this.stage.camera);
     this.culler = new DetailCuller(this.stage.camera, this.gate);
-    this.loop = new RenderLoop(this.stage.renderer, this.stage.render.bind(this.stage));
+    this.loop = new RenderLoop(this.stage.renderer, this.stage.render.bind(this.stage), this.stage.stats);
+  }
+
+  /**
+   * Medición de rendimiento de los últimos frames (para el medidor `?perf`).
+   *
+   * @returns Medición.
+   */
+  public get perf(): PerfSnapshot {
+    return this.stage.stats.snapshot();
   }
 
   /**

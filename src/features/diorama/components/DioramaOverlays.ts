@@ -1,4 +1,5 @@
 import type { BootScreenComponent } from './BootScreenComponent';
+import type { PerfHudComponent } from './PerfHudComponent';
 import type { SectionNavComponent } from './SectionNavComponent';
 import type { SoundToggleComponent } from './SoundToggleComponent';
 
@@ -12,4 +13,6 @@ export interface DioramaOverlays {
   readonly soundToggle: SoundToggleComponent;
   /** Riel de navegación entre secciones. */
   readonly nav: SectionNavComponent;
+  /** Medidor de rendimiento (solo con `?perf` en la URL). */
+  readonly perf: PerfHudComponent;
 }

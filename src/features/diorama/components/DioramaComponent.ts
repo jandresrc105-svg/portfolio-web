@@ -22,6 +22,7 @@ export class DioramaComponent extends Component {
   private static readonly TUNING_CLASS = 'is-tuning';
   private static readonly DIAL_KEY = /^[0-9*#]$/;
   private static readonly CALL_FEATURES = 'noopener,noreferrer';
+  private static readonly PERF_PARAM = 'perf';
 
   private readonly canvas = ElementBuilder.create('canvas')
     .classes('diorama__canvas')
@@ -106,6 +107,10 @@ export class DioramaComponent extends Component {
    */
   protected override onMount(): void {
     this.mountChild(this.overlays.boot, document.body);
+    if (new URLSearchParams(window.location.search).has(DioramaComponent.PERF_PARAM)) {
+      this.overlays.perf.connect(() => this.experience?.perf ?? null);
+      this.mountChild(this.overlays.perf, document.body);
+    }
     void this.start();
   }
 

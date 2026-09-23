@@ -22,10 +22,12 @@ export class RenderLoop {
    *
    * @param renderer Renderer que provee `setAnimationLoop`.
    * @param draw Función que dibuja el frame.
+   * @param stats Medición de rendimiento de cada frame dibujado (opcional).
    */
   public constructor(
     private readonly renderer: WebGLRenderer,
     private readonly draw: () => void,
+    private readonly stats: { beginFrame: () => void; endFrame: () => void } | null = null,
   ) {}
 
   /**
@@ -80,6 +82,7 @@ export class RenderLoop {
     if (!this.pacer.shouldDraw(timestamp)) {
       return;
     }
+    this.stats?.beginFrame();
     this.timer.update(timestamp);
     const delta = Math.min(this.timer.getDelta(), 1 / RenderLoop.MIN_FPS);
     this.idleFor += delta;
@@ -89,5 +92,6 @@ export class RenderLoop {
       updatable.update(delta, elapsed);
     });
     this.draw();
+    this.stats?.endFrame();
   }
 }

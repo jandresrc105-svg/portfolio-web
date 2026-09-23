@@ -1,0 +1,22 @@
+@use '../abstracts' as *;
+
+.perf-hud {
+  position: fixed;
+  top: $space-sm;
+  left: $space-sm;
+  z-index: $z-tooltip;
+  padding: $space-sm;
+  border: 1px solid $glass-border;
+  border-radius: $radius-pill;
+  background: $glass-background;
+  color: $color-text;
+  font-family: $font-mono;
+  font-size: 0.66rem;
+  pointer-events: none;
+  backdrop-filter: blur($glass-blur);
+
+  &__lines {
+    margin: 0;
+    white-space: pre;
+  }
+}

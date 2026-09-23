@@ -8,6 +8,7 @@ import { QualityDetector } from '@shared/engine/QualityDetector';
 import { BootScreenComponent } from './components/BootScreenComponent';
 import { DioramaComponent } from './components/DioramaComponent';
 import { SectionNavComponent } from './components/SectionNavComponent';
+import { PerfHudComponent } from './components/PerfHudComponent';
 import { SoundToggleComponent } from './components/SoundToggleComponent';
 import { DioramaExperienceFactory } from './experience/DioramaExperienceFactory';
 import { BreakerPanelService } from './services/BreakerPanelService';
@@ -86,6 +87,7 @@ export class DioramaModule implements FeatureModule {
       .transient(BootScreenComponent, () => new BootScreenComponent())
       .transient(SoundToggleComponent, (c) => new SoundToggleComponent(c.resolve(AudioEngine)))
       .transient(SectionNavComponent, (c) => new SectionNavComponent(c.resolve(SectionNavigator)))
+      .transient(PerfHudComponent, () => new PerfHudComponent())
       .transient(DioramaComponent, (c) => DioramaModule.diorama(c));
   }
 
@@ -105,6 +107,7 @@ export class DioramaModule implements FeatureModule {
         boot: container.resolve(BootScreenComponent),
         soundToggle: container.resolve(SoundToggleComponent),
         nav: container.resolve(SectionNavComponent),
+        perf: container.resolve(PerfHudComponent),
       },
     );
   }

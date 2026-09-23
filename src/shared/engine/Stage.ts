@@ -10,6 +10,7 @@ import {
   type Material,
   type WebGLRenderTarget,
 } from 'three';
+import { FrameStats } from './FrameStats';
 import { PostProcessing } from './PostProcessing';
 import { ProgramSort } from './ProgramSort';
 import type { QualityProfile } from './QualityProfile';
@@ -28,6 +29,7 @@ export class Stage {
   public readonly scene = new Scene();
   public readonly camera = new PerspectiveCamera(Stage.FOV, 1, Stage.NEAR, Stage.FAR);
   public readonly renderer: WebGLRenderer;
+  public readonly stats: FrameStats;
 
   private readonly post: PostProcessing;
   private size = { width: 1, height: 1 };
@@ -55,6 +57,7 @@ export class Stage {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.camera.layers.enable(RenderLayer.Background);
     this.scene.matrixWorldAutoUpdate = false;
+    this.stats = new FrameStats(this.renderer);
     const sort = new ProgramSort();
     this.renderer.setOpaqueSort(sort.compare.bind(sort));
     this.post = new PostProcessing(this.renderer, this.scene, this.camera, quality);
@@ -134,8 +137,10 @@ export class Stage {
    */
   public render(): void {
     this.scene.updateMatrixWorld();
+    this.stats.beginGpu();
     this.beforeRender?.();
     this.post.render();
+    this.stats.endGpu();
   }
 
   /**
