@@ -311,7 +311,7 @@ export class DioramaScene {
       PowerMode.Strike,
     );
     this.animate(new RamenBowl(this.textures, this.random));
-    this.animate(new ManekiNeko());
+    this.animate(new ManekiNeko(this.textures));
     this.buildLab();
   }
 
