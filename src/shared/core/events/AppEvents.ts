@@ -1,4 +1,5 @@
 import type { ContactChannel } from './ContactChannel';
+import type { TimelineDirectory } from './TimelineDirectory';
 
 /**
  * Catálogo de eventos de la aplicación y el tipo de su carga.
@@ -14,4 +15,10 @@ export interface AppEvents {
   readonly showcasePicked: number;
   /** La sección de contacto se montó: canales del marcado rápido del teléfono (la tecla `i + 1` llama al `i`). */
   readonly contactChannels: readonly ContactChannel[];
+  /** El visitante eligió una etapa de la trayectoria (índice desde 0). */
+  readonly timelineSelected: number;
+  /** La trayectoria se montó: breakers, sellos y fecha del medidor del tablero del poste. */
+  readonly timelineDirectory: TimelineDirectory;
+  /** El visitante subió un breaker del tablero en la escena 3D (índice de la etapa desde 0). */
+  readonly timelinePicked: number;
 }

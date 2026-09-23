@@ -3,8 +3,10 @@ import { ElementBuilder } from '@shared/core/dom/ElementBuilder';
 import type { PidLoopService } from '@shared/control/PidLoopService';
 import type { AppEventBus } from '@shared/core/events/AppEventBus';
 import type { Section } from '../models/Section';
+import type { SectionCertificate } from '../models/SectionCertificate';
 import type { SectionItem } from '../models/SectionItem';
 import type { SectionLink } from '../models/SectionLink';
+import type { ShowcaseChannel } from '../models/ShowcaseChannel';
 import { ItemCard } from './ItemCard';
 import { PidTunerComponent } from './PidTunerComponent';
 import { ShowcaseComponent } from './ShowcaseComponent';
@@ -12,11 +14,23 @@ import { ShowcaseComponent } from './ShowcaseComponent';
 /**
  * Una sección de contenido: tarjeta de vidrio con botón para volver a la vista general, texto, etiquetas,
  * elementos y enlaces.
- * Si la sección es una vitrina, sus elementos se recorren de uno en uno con {@link ShowcaseComponent}; si
- * tiene sintonizador, muestra {@link PidTunerComponent} antes de sus elementos. Si es la del teléfono, sus
+ * Si la sección es una vitrina (latas) o la trayectoria (breakers), sus elementos se recorren de uno en uno
+ * con {@link ShowcaseComponent} y se publica a la escena qué objeto corresponde a cada uno; si tiene
+ * sintonizador, muestra {@link PidTunerComponent} antes de sus elementos. Si es la del teléfono, sus
  * enlaces son el marcado rápido: se numeran y se publican en `contactChannels` para la escena.
  */
 export class SectionComponent extends Component {
+  private static readonly SHOWCASE: ShowcaseChannel = {
+    selected: 'showcaseSelected',
+    picked: 'showcasePicked',
+    label: 'Vitrina de la máquina expendedora',
+  };
+  private static readonly TIMELINE: ShowcaseChannel = {
+    selected: 'timelineSelected',
+    picked: 'timelinePicked',
+    label: 'Etapas del tablero del poste',
+  };
+
   private readonly showcase = ElementBuilder.create('div').classes('section__showcase').build();
   private readonly tuner = ElementBuilder.create('div').classes('section__tuner').build();
   private readonly back = ElementBuilder.create('button')
@@ -69,10 +83,8 @@ export class SectionComponent extends Component {
    * @inheritdoc
    */
   protected override onMount(): void {
-    const { showcase, tuner, phone, items = [], links = [] } = this.section;
-    if (showcase && items.length > 0) {
-      this.mountChild(new ShowcaseComponent(items, this.events), this.showcase);
-    }
+    const { tuner, phone, links = [] } = this.section;
+    this.mountShowcase();
     if (tuner) {
       this.mountChild(new PidTunerComponent(this.loop), this.tuner);
     }
@@ -87,8 +99,7 @@ export class SectionComponent extends Component {
    * @returns Elemento de la tarjeta.
    */
   private card(): HTMLElement {
-    const { tags = [], items = [], links = [], showcase, tuner, phone } = this.section;
-    const body = showcase ? [this.showcase] : SectionComponent.itemList(items);
+    const { tags = [], links = [], tuner, phone, certificates = [] } = this.section;
     const extras = tuner ? [this.tuner] : [];
     return ElementBuilder.create('article')
       .classes('section__card')
@@ -97,10 +108,55 @@ export class SectionComponent extends Component {
         ...this.heading(),
         ...ItemCard.tags(tags),
         ...extras,
-        ...body,
+        ...this.body(),
+        ...SectionComponent.certificateList(certificates),
         ...SectionComponent.linkList(phone ? SectionComponent.speedDial(links) : links),
       )
       .build();
+  }
+
+  /**
+   * Cuerpo de la tarjeta: la vitrina (si la sección recorre sus elementos de a uno) o la lista de elementos.
+   *
+   * @returns Elementos del cuerpo.
+   */
+  private body(): HTMLElement[] {
+    const { items = [], showcase, timeline } = this.section;
+    return showcase || timeline ? [this.showcase] : SectionComponent.itemList(items);
+  }
+
+  /**
+   * Si la sección es la vitrina o la trayectoria, publica a la escena el objeto de cada elemento (sabor de
+   * lata o etiqueta de breaker) y monta la vitrina con sus eventos.
+   */
+  private mountShowcase(): void {
+    const { showcase, timeline, items = [] } = this.section;
+    if (items.length === 0 || !(showcase || timeline)) {
+      return;
+    }
+    if (timeline) {
+      this.announceTimeline(items);
+    } else {
+      this.events.emit(
+        'showcaseCans',
+        items.map((item) => item.can ?? ''),
+      );
+    }
+    const channel = timeline ? SectionComponent.TIMELINE : SectionComponent.SHOWCASE;
+    this.mountChild(new ShowcaseComponent(items, this.events, channel), this.showcase);
+  }
+
+  /**
+   * Publica al tablero del poste la etiqueta de cada etapa, los sellos de las certificaciones y la fecha del
+   * medidor.
+   *
+   * @param items Etapas de la trayectoria.
+   */
+  private announceTimeline(items: readonly SectionItem[]): void {
+    const { certificates = [], since = '' } = this.section;
+    const breakers = items.map((item) => item.breaker ?? item.title);
+    const seals = certificates.map((certificate) => `${certificate.issuer} ${certificate.year}`);
+    this.events.emit('timelineDirectory', { breakers, seals, since });
   }
 
   /**
@@ -134,6 +190,45 @@ export class SectionComponent extends Component {
         .children(...cards)
         .build(),
     ];
+  }
+
+  /**
+   * Lista de certificaciones ("Fundamentals of Deep Learning — NVIDIA · 2022").
+   *
+   * @param certificates Certificaciones.
+   * @returns Bloque con título y lista, o vacío si no hay certificaciones.
+   */
+  private static certificateList(certificates: readonly SectionCertificate[]): HTMLElement[] {
+    if (certificates.length === 0) {
+      return [];
+    }
+    const rows = certificates.map((certificate) => SectionComponent.certificateRow(certificate));
+    const heading = ElementBuilder.create('h3')
+      .classes('certificates__heading')
+      .text('Certificaciones')
+      .build();
+    const list = ElementBuilder.create('ul')
+      .classes('certificates__list')
+      .children(...rows)
+      .build();
+    return [ElementBuilder.create('div').classes('certificates').children(heading, list).build()];
+  }
+
+  /**
+   * Una fila de la lista de certificaciones: nombre a la izquierda, emisor y año a la derecha.
+   *
+   * @param certificate Certificación.
+   * @returns Elemento `<li>`.
+   */
+  private static certificateRow(certificate: SectionCertificate): HTMLElement {
+    const { title, issuer, year } = certificate;
+    return ElementBuilder.create('li')
+      .classes('certificates__item')
+      .children(
+        ElementBuilder.create('span').classes('certificates__title').text(title).build(),
+        ElementBuilder.create('span').classes('certificates__meta').text(`${issuer} · ${year}`).build(),
+      )
+      .build();
   }
 
   /**

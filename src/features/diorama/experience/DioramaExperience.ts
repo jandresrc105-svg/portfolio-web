@@ -11,6 +11,7 @@ import { AudibleSwitch } from '../audio/AudibleSwitch';
 import type { Soundscape } from '../audio/Soundscape';
 import { CameraDirector } from '../camera/CameraDirector';
 import { PowerOnSequence } from '../intro/PowerOnSequence';
+import type { DeviceInteraction } from '../models/DeviceInteraction';
 import type { DioramaDevices } from '../models/DioramaDevices';
 import type { Hotspot } from '../models/Hotspot';
 import type { ScopeControlId } from '../models/ScopeControlId';
@@ -22,11 +23,12 @@ import { DioramaScene } from '../scene/DioramaScene';
 import { MaterialLibrary } from '../scene/MaterialLibrary';
 import { NeonEnvironment } from '../scene/NeonEnvironment';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
+import { PanelInteraction } from './PanelInteraction';
 import { PhoneInteraction } from './PhoneInteraction';
 
 /**
  * Orquesta la experiencia 3D (patrón Facade): escenario, diorama, cámara, bucle, intro, sonido e interacción
- * (marcadores, latas, osciloscopio y teléfono).
+ * (marcadores, latas, osciloscopio, teléfono y tablero del poste).
  * El componente DOM solo le pasa eventos, tamaños y a qué parada del recorrido ir; el arrastre, la rueda y
  * los gestos táctiles sobre el canvas los maneja directamente {@link CameraDirector}.
  */
@@ -42,6 +44,7 @@ export class DioramaExperience {
   private readonly controls = new PointerPicker<ScopeControlId>();
   private readonly resolution: AdaptiveResolution;
   private readonly focus = new Vector3();
+  private readonly stations: { stop: number; device: DeviceInteraction }[] = [];
   private phone: PhoneInteraction | null = null;
   private call: ((channel: ContactChannel) => void) | null = null;
   private hovered: HotspotMarker | null = null;
@@ -117,6 +120,7 @@ export class DioramaExperience {
     });
     this.focusShowcase();
     this.connectPhone();
+    this.connectPanel();
     this.connectSound();
     this.diorama.puddles?.reflectOnly(this.stage.camera, RenderLayer.Reflected);
     this.loop.add(this.director, this.resolution, this.sound, this.devices.phone, ...this.diorama.updatables);
@@ -146,7 +150,9 @@ export class DioramaExperience {
   public travelTo(stop: number): void {
     this.stop = stop;
     this.director.travelTo(stop);
-    this.phone?.setActive(stop === this.diorama.contactStop);
+    this.stations.forEach((station) => {
+      station.device.setActive(station.stop === stop);
+    });
   }
 
   /**
@@ -158,7 +164,9 @@ export class DioramaExperience {
   public setPointer(x: number, y: number): void {
     this.picker.setPointer(x, y);
     this.controls.setPointer(x, y);
-    this.phone?.setPointer(x, y);
+    this.stations.forEach(({ device }) => {
+      device.setPointer(x, y);
+    });
   }
 
   /**
@@ -310,23 +318,24 @@ export class DioramaExperience {
   }
 
   /**
-   * Detecta el control del teléfono bajo el puntero (solo con la sección de contacto abierta y sin un
-   * marcador delante) y lo resalta.
+   * Detecta el control del equipo de la sección abierta (teléfono o tablero) bajo el puntero, si no hay un
+   * marcador delante, y lo resalta.
    *
    * @returns Texto del tooltip del control señalado o `null`.
    */
-  public hoverPhone(): string | null {
-    const enabled = this.interactive && this.hovered === null && this.stop === this.diorama.contactStop;
-    return this.phone?.hover(this.stage.camera, enabled) ?? null;
+  public hoverDevice(): string | null {
+    const enabled = this.interactive && this.hovered === null;
+    return this.station()?.hover(this.stage.camera, enabled) ?? null;
   }
 
   /**
-   * Usa el control del teléfono señalado: descolgar, marcar o reabrir el canal.
+   * Usa el control señalado del equipo de la sección abierta (descolgar, marcar, abrir el tablero, subir un
+   * breaker…).
    *
    * @returns `true` si se usó un control.
    */
-  public pressPhone(): boolean {
-    return this.hoverPhone() !== null && (this.phone?.press() ?? false);
+  public pressDevice(): boolean {
+    return this.hoverDevice() !== null && (this.station()?.press() ?? false);
   }
 
   /**
@@ -377,7 +386,9 @@ export class DioramaExperience {
    */
   public dispose(): void {
     this.loop.stop();
-    this.phone?.dispose();
+    this.stations.forEach(({ device }) => {
+      device.dispose();
+    });
     this.director.dispose();
     this.sound.dispose();
     this.diorama.dispose();
@@ -406,6 +417,27 @@ export class DioramaExperience {
     this.phone.onCall((channel) => {
       this.call?.(channel);
     });
+    this.stations.push({ stop: this.diorama.contactStop, device: this.phone });
+  }
+
+  /**
+   * Conecta el tablero del poste con el puntero, el sonido y la farola que controla su MAIN.
+   */
+  private connectPanel(): void {
+    const { breakerPanel, streetLine } = this.diorama;
+    if (breakerPanel && streetLine) {
+      const panel = new PanelInteraction(this.devices.panel, breakerPanel, streetLine, this.sound);
+      this.stations.push({ stop: this.diorama.timelineStop, device: panel });
+    }
+  }
+
+  /**
+   * Equipo de la sección abierta, si tiene uno.
+   *
+   * @returns Equipo o `undefined`.
+   */
+  private station(): DeviceInteraction | undefined {
+    return this.stations.find((entry) => entry.stop === this.stop)?.device;
   }
 
   /**

@@ -2,6 +2,7 @@ import type { Camera } from 'three';
 import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import { PointerPicker } from '@shared/engine/PointerPicker';
 import type { Soundscape } from '../audio/Soundscape';
+import type { DeviceInteraction } from '../models/DeviceInteraction';
 import type { PhoneEvent } from '../models/PhoneEvent';
 import { PayPhoneService } from '../services/PayPhoneService';
 import type { PhoneBooth } from '../scene/objects/PhoneBooth';
@@ -11,7 +12,7 @@ import type { PhoneBooth } from '../scene/objects/PhoneBooth';
  * pantalla; {@link PayPhoneService} decide qué pasa, y sus avisos mueven el auricular, redibujan la pantalla,
  * suenan y, al conectar una llamada, piden abrir el canal.
  */
-export class PhoneInteraction {
+export class PhoneInteraction implements DeviceInteraction {
   private static readonly COLUMNS = 3;
 
   private readonly picker = new PointerPicker<string>();

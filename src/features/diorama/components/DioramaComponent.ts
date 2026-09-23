@@ -5,11 +5,12 @@ import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import type { SectionNavigator } from '@shared/core/navigation/SectionNavigator';
 import type { DioramaExperience } from '../experience/DioramaExperience';
 import type { DioramaExperienceFactory } from '../experience/DioramaExperienceFactory';
+import type { BreakerPanelService } from '../services/BreakerPanelService';
 import type { DioramaOverlays } from './DioramaOverlays';
 
 /**
- * Escena 3D a pantalla completa. Maneja el canvas, el tooltip, los clics sobre marcadores, latas y el
- * teléfono (y los números del teclado físico, que marcan en la sección de contacto); el
+ * Escena 3D a pantalla completa. Maneja el canvas, el tooltip, los clics sobre marcadores, latas, el
+ * teléfono y el tablero del poste (y los números del teclado físico, que marcan en la sección de contacto); el
  * giro, la rueda y los gestos táctiles los atiende la cámara de {@link DioramaExperience}. Cada cambio de
  * sección del {@link SectionNavigator} lleva la cámara a su parada.
  */
@@ -49,12 +50,14 @@ export class DioramaComponent extends Component {
    * @param factory Fábrica de la experiencia 3D.
    * @param navigator Navegación entre secciones.
    * @param events Bus de eventos de la aplicación.
+   * @param panel Tablero del poste (etapas de la trayectoria).
    * @param overlays Consola de arranque, botón de sonido y riel de secciones.
    */
   public constructor(
     private readonly factory: DioramaExperienceFactory,
     private readonly navigator: SectionNavigator,
     private readonly events: AppEventBus,
+    private readonly panel: BreakerPanelService,
     private readonly overlays: DioramaOverlays,
   ) {
     super();
@@ -91,6 +94,7 @@ export class DioramaComponent extends Component {
     });
     this.bindPointer();
     this.bindShowcase();
+    this.bindTimeline();
     this.listenWindow('keydown', (event) => {
       this.dial(event);
     });
@@ -145,6 +149,26 @@ export class DioramaComponent extends Component {
       this.events.on('contactChannels', (channels) => {
         this.contacts = channels;
         this.experience?.setContacts(channels);
+      }),
+    );
+  }
+
+  /**
+   * Sigue a la trayectoria: sus etapas son los breakers del tablero; elegir una en la vitrina abre el
+   * tablero y subir un breaker en la escena la muestra en la vitrina.
+   */
+  private bindTimeline(): void {
+    this.subscriptions.push(
+      this.events.on('timelineDirectory', (directory) => {
+        this.panel.setDirectory(directory);
+      }),
+      this.events.on('timelineSelected', (index) => {
+        this.panel.select(index);
+      }),
+      this.panel.on((event) => {
+        if (event.type === 'picked') {
+          this.events.emit('timelinePicked', event.index);
+        }
       }),
     );
   }
@@ -332,7 +356,7 @@ export class DioramaComponent extends Component {
 
   /**
    * Texto del tooltip para lo que está bajo el puntero: un marcador, una lata de la vitrina, un control del
-   * osciloscopio o uno del teléfono (en ese orden).
+   * osciloscopio o uno del equipo de la sección (teléfono o tablero), en ese orden.
    *
    * @param experience Experiencia 3D.
    * @returns Texto o `null` si no se señala nada interactivo.
@@ -341,14 +365,14 @@ export class DioramaComponent extends Component {
     const hotspot = experience.hover();
     const item = experience.hoverItem();
     const control = experience.hoverControl();
-    const phone = experience.hoverPhone();
+    const device = experience.hoverDevice();
     if (hotspot) {
       return hotspot.label;
     }
     if (item !== null) {
       return experience.itemName(item);
     }
-    return control === null ? phone : experience.controlLabel(control);
+    return control === null ? device : experience.controlLabel(control);
   }
 
   /**
@@ -370,7 +394,7 @@ export class DioramaComponent extends Component {
 
   /**
    * Activa lo que está bajo el puntero: un marcador lleva a su sección, una lata la elige en la vitrina
-   * y lleva a la sección de la vitrina, y un control del teléfono se usa.
+   * y lleva a la sección de la vitrina, y un control del teléfono o del tablero se usa.
    *
    * @param experience Experiencia 3D.
    */
@@ -385,7 +409,7 @@ export class DioramaComponent extends Component {
       this.events.emit('showcasePicked', item);
       this.navigator.go(experience.showcaseSection);
     } else {
-      experience.pressPhone();
+      experience.pressDevice();
     }
   }
 }

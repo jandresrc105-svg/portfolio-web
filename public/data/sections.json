@@ -194,19 +194,62 @@
     "eyebrow": "04 — Experiencia",
     "title": "Trayectoria",
     "align": "right",
-    "paragraphs": ["El tablero del poste guarda el registro de por dónde ha pasado la corriente."],
+    "paragraphs": [
+      "El tablero del poste guarda por dónde ha pasado la corriente. Ábrelo y sube los breakers: cada uno es una etapa, y cuando todos están arriba la corriente llega al presente.",
+      "El MAIN apaga y prende la farola; el medidor cuenta mi tiempo de experiencia."
+    ],
+    "timeline": true,
+    "since": "2024-07-01",
     "items": [
       {
-        "title": "Desarrollador web",
-        "meta": "2024 — Actualidad",
-        "description": "Reemplaza con la empresa, tu rol y dos o tres logros concretos.",
-        "tags": ["TypeScript", "Frontend"]
+        "title": "Ingeniería Electrónica",
+        "breaker": "UQ",
+        "meta": "Universidad del Quindío · 2019 — 2025",
+        "description": "Profundización en automatización y control: laboratorios de control de plantas reales. [Completa: materias, laboratorios o proyectos destacados].",
+        "tags": ["Automatización", "Control", "Sistemas digitales"]
       },
       {
-        "title": "Ingeniero electrónico",
-        "meta": "Formación",
-        "description": "Énfasis en automatización y control.",
-        "tags": ["Automatización", "Control"]
+        "title": "Dosificador de comida para mascotas",
+        "breaker": "ESP32",
+        "meta": "Proyecto · [Año]",
+        "description": "Aplicación web para programar horarios y cantidades de comida, alojada en una ESP32 con DNS propio. La ESP32 era a la vez servidor, base de datos y el embebido que movía el dosificador. [Completa: detalles y resultados].",
+        "tags": ["ESP32", "IoT", "Embebidos"]
+      },
+      {
+        "title": "Diplomado en desarrollo de videojuegos",
+        "breaker": "UNITY",
+        "meta": "Universidad del Quindío · 2024",
+        "description": "Mi trabajo de grado. [Completa: de qué trataba el juego o la simulación].",
+        "tags": ["Unity", "C#"]
+      },
+      {
+        "title": "Desarrollador de Software",
+        "breaker": "DEV",
+        "meta": "OptiPlant Consultores · Jul 2024 — Actualidad",
+        "description": "[Completa: qué construyes, con qué stack y dos o tres logros concretos].",
+        "tags": ["TypeScript", "Frontend"]
+      }
+    ],
+    "certificates": [
+      {
+        "title": "Introducción a cloud computing con AWS",
+        "issuer": "Udemy",
+        "year": "2025"
+      },
+      {
+        "title": "Diplomado de desarrollo de videojuegos en Unity",
+        "issuer": "UQ",
+        "year": "2024"
+      },
+      {
+        "title": "JavaScript Moderno",
+        "issuer": "Udemy",
+        "year": "2023"
+      },
+      {
+        "title": "Fundamentals of Deep Learning",
+        "issuer": "NVIDIA",
+        "year": "2022"
       }
     ]
   },
@@ -227,7 +270,7 @@
       },
       {
         "label": "LinkedIn",
-        "href": "https://www.linkedin.com/"
+        "href": "https://www.linkedin.com/in/juan-reyes-carmona/"
       },
       {
         "label": "Gmail",

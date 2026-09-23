@@ -185,6 +185,44 @@
   font-size: 0.72rem;
 }
 
+.certificates {
+  display: grid;
+  gap: $space-xs;
+
+  &__heading {
+    color: $color-muted;
+    font-family: $font-mono;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  &__list {
+    display: grid;
+    gap: $space-xs;
+    padding: 0;
+    list-style: none;
+  }
+
+  &__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 $space-sm;
+    padding-bottom: $space-xs;
+    border-bottom: 1px dashed rgba($color-text, 0.12);
+    font-size: 0.85rem;
+  }
+
+  &__meta {
+    color: $color-lantern;
+    font-family: $font-mono;
+    font-size: 0.7rem;
+  }
+}
+
 .showcase {
   display: grid;
   gap: $space-sm;

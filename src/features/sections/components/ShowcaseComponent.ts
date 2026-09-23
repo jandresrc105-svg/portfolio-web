@@ -2,12 +2,14 @@ import { Component } from '@shared/core/component/Component';
 import { ElementBuilder } from '@shared/core/dom/ElementBuilder';
 import type { AppEventBus } from '@shared/core/events/AppEventBus';
 import type { SectionItem } from '../models/SectionItem';
+import type { ShowcaseChannel } from '../models/ShowcaseChannel';
 import { ItemCard } from './ItemCard';
 
 /**
- * Vitrina: muestra un elemento a la vez (hoy, las tecnologías), con flechas, contador y puntos. Cada cambio publica
- * `showcaseSelected` para que la escena 3D resalte la lata correspondiente y la cámara se acerque a ella;
- * al hacer clic en una lata de la escena llega `showcasePicked` y la vitrina muestra ese elemento.
+ * Vitrina: muestra un elemento a la vez (las tecnologías o las etapas de la trayectoria), con flechas,
+ * contador y puntos. Cada cambio publica el evento `selected` de su {@link ShowcaseChannel} para que la escena
+ * 3D resalte su objeto (la lata o el breaker); al elegir un objeto en la escena llega `picked` y la vitrina
+ * muestra ese elemento.
  * Mientras la vitrina está en pantalla, las flechas ← → del teclado solo cambian de elemento: en los
  * extremos no pasan a otra sección, la flecha correspondiente rebota para indicar el tope.
  */
@@ -33,12 +35,14 @@ export class ShowcaseComponent extends Component {
   /**
    * Crea la vitrina.
    *
-   * @param items Elementos, en el mismo orden que las latas de la máquina.
+   * @param items Elementos, en el mismo orden que sus objetos de la escena.
    * @param events Bus de eventos de la aplicación.
+   * @param channel Eventos con los que habla con su objeto de la escena.
    */
   public constructor(
     private readonly items: readonly SectionItem[],
     private readonly events: AppEventBus,
+    private readonly channel: ShowcaseChannel,
   ) {
     super();
     this.dots = items.map((item, position) =>
@@ -74,7 +78,7 @@ export class ShowcaseComponent extends Component {
     return ElementBuilder.create('div')
       .classes('showcase')
       .attr('role', 'group')
-      .attr('aria-label', 'Vitrina de la máquina expendedora')
+      .attr('aria-label', this.channel.label)
       .children(controls, this.slide, dots)
       .build();
   }
@@ -104,13 +108,9 @@ export class ShowcaseComponent extends Component {
    * @inheritdoc
    */
   protected override onMount(): void {
-    this.unsubscribe = this.events.on('showcasePicked', (item) => {
+    this.unsubscribe = this.events.on(this.channel.picked, (item) => {
       this.show(item);
     });
-    this.events.emit(
-      'showcaseCans',
-      this.items.map((item) => item.can ?? ''),
-    );
     this.show(0);
   }
 
@@ -131,7 +131,7 @@ export class ShowcaseComponent extends Component {
       this.slide.classList.add(ShowcaseComponent.ENTER_CLASS);
     });
     this.updateControls();
-    this.events.emit('showcaseSelected', this.index);
+    this.events.emit(this.channel.selected, this.index);
   }
 
   /**

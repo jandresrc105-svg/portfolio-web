@@ -8,11 +8,13 @@ import type { Hotspot } from '../models/Hotspot';
 import { PowerMode } from '../models/PowerMode';
 import type { PowerStep } from '../models/PowerStep';
 import type { Weather } from '../models/Weather';
+import { BreakerPanelService } from '../services/BreakerPanelService';
 import { PayPhoneService } from '../services/PayPhoneService';
 import type { ScopeControlService } from '../services/ScopeControlService';
 import { CanvasTextureFactory } from './CanvasTextureFactory';
 import { PowerGroup } from './PowerGroup';
 import { Storm } from './Storm';
+import { SwitchedLine } from './SwitchedLine';
 import type { MaterialLibrary } from './MaterialLibrary';
 import type { DioramaSceneOptions } from './DioramaSceneOptions';
 import { Chef } from './characters/Chef';
@@ -46,6 +48,7 @@ import { StreetMarkings } from './objects/StreetMarkings';
 import { StringLights } from './objects/StringLights';
 import { UtilityPole } from './objects/UtilityPole';
 import { VendingMachine } from './objects/VendingMachine';
+import { BreakerPanel } from './panel/BreakerPanel';
 
 /**
  * Diorama completo (patrón Composite): crea cada pieza, la agrega a la escena y expone
@@ -61,6 +64,7 @@ export class DioramaScene {
   ];
   private static readonly SHOWCASE_SECTION = 'tecnologias';
   private static readonly CONTACT_SECTION = 'contacto';
+  private static readonly TIMELINE_SECTION = 'experiencia';
   private static readonly LANTERNS = [
     { anchor: { x: -2.35, y: 2.55, z: 1.62 }, glyph: '麺', phase: 0, at: 1.6 },
     { anchor: { x: 2.35, y: 2.55, z: 1.62 }, glyph: '灯', phase: 1.7, at: 1.95 },
@@ -104,6 +108,8 @@ export class DioramaScene {
   public vending: VendingMachine | null = null;
   public oscilloscope: Oscilloscope | null = null;
   public phoneBooth: PhoneBooth | null = null;
+  public breakerPanel: BreakerPanel | null = null;
+  public streetLine: SwitchedLine | null = null;
 
   private readonly objects: SceneObject[] = [];
   private readonly luminous: SceneObject[] = [];
@@ -164,6 +170,17 @@ export class DioramaScene {
   public get showcaseStop(): number {
     return (
       DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.SHOWCASE_SECTION) + 1
+    );
+  }
+
+  /**
+   * Parada del recorrido de la sección de la trayectoria (la del tablero del poste).
+   *
+   * @returns Índice de la parada.
+   */
+  public get timelineStop(): number {
+    return (
+      DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === DioramaScene.TIMELINE_SECTION) + 1
     );
   }
 
@@ -315,22 +332,39 @@ export class DioramaScene {
   }
 
   /**
-   * Calle: poste con farola, máquina expendedora y cabina telefónica.
+   * Calle: poste con farola (detrás del MAIN del tablero), tablero de la trayectoria, máquina expendedora y
+   * cabina telefónica.
    */
   private buildStreet(): void {
-    const pole = this.glow(this.animate(new UtilityPole(this.materials)));
+    const pole = this.glow(this.register(new UtilityPole(this.materials)));
     const cone = this.register(new LightCone());
+    this.streetLine = new SwitchedLine(new PowerGroup(pole, cone));
+    this.updatables.push(this.streetLine);
     this.powerSteps.push({
-      target: new PowerGroup(pole, cone),
+      target: this.streetLine,
       at: DioramaScene.TIMELINE.street,
       mode: PowerMode.Strike,
     });
+    this.buildPanel();
     this.vending = this.glow(this.animate(new VendingMachine(this.textures)));
     this.power(this.vending, DioramaScene.TIMELINE.vending, PowerMode.Strike);
     this.phoneBooth = this.glow(
       this.animate(new PhoneBooth(this.materials, this.textures, PayPhoneService.KEYS)),
     );
     this.power(this.phoneBooth, DioramaScene.TIMELINE.phone, PowerMode.Strike);
+  }
+
+  /**
+   * Tablero de la trayectoria montado en el poste, con el medidor debajo.
+   */
+  private buildPanel(): void {
+    const ids = {
+      door: BreakerPanelService.DOOR,
+      main: BreakerPanelService.MAIN,
+      breaker: (index: number): string => BreakerPanelService.breakerId(index),
+    };
+    this.breakerPanel = this.animate(new BreakerPanel(this.textures, ids));
+    this.power(this.breakerPanel, DioramaScene.TIMELINE.street, PowerMode.Fade);
   }
 
   /**

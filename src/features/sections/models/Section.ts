@@ -1,3 +1,4 @@
+import type { SectionCertificate } from './SectionCertificate';
 import type { SectionItem } from './SectionItem';
 import type { SectionLink } from './SectionLink';
 
@@ -27,4 +28,13 @@ export interface Section {
   readonly tuner?: boolean;
   /** Sus enlaces son el marcado rápido del teléfono de la escena (el primero es la tecla 1). */
   readonly phone?: boolean;
+  /**
+   * Sus elementos son las etapas de la trayectoria: se recorren como vitrina y cada una es un breaker del
+   * tablero del poste (su etiqueta sale de `breaker`).
+   */
+  readonly timeline?: boolean;
+  /** Certificaciones: se listan en la tarjeta y son los sellos de la puerta del tablero. */
+  readonly certificates?: readonly SectionCertificate[];
+  /** Fecha ISO desde la que cuenta el medidor de energía del poste (inicio de la experiencia laboral). */
+  readonly since?: string;
 }

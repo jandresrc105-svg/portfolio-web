@@ -12,14 +12,14 @@ import {
 } from 'three';
 import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
-import type { Updatable } from '@shared/engine/Updatable';
 import type { Powerable } from '../../models/Powerable';
 import type { MaterialLibrary } from '../MaterialLibrary';
 
 /**
- * Poste eléctrico con farola, transformador, cables colgantes y tablero de breakers con LEDs.
+ * Poste eléctrico con farola, transformador y cables colgantes. El tablero de la trayectoria va aparte
+ * (`BreakerPanel`), montado en el poste.
  */
-export class UtilityPole extends SceneObject implements Updatable, Powerable {
+export class UtilityPole extends SceneObject implements Powerable {
   private static readonly BASE = { x: -3.75, z: -0.95 };
   private static readonly POLE = { radius: 0.11, top: 0.08, height: 6.6 };
   private static readonly ARMS = [
@@ -29,8 +29,6 @@ export class UtilityPole extends SceneObject implements Updatable, Powerable {
   private static readonly ARM_SIZE = 0.1;
   private static readonly TRANSFORMER = { radius: 0.24, height: 0.62, x: 0.34, y: 4.9 };
   private static readonly LAMP = { armLength: 1.3, y: 4.55, headWidth: 0.42, color: 0xd6e6ff, intensity: 38 };
-  private static readonly PANEL = { width: 0.46, height: 0.62, depth: 0.16, y: 1.55, z: 0.17 };
-  private static readonly LED = { size: 0.035, spacing: 0.1, y: 1.74, blinkSpeed: 3.2 };
   private static readonly WIRE_RADIUS = 0.012;
   private static readonly WIRE_SAG = 0.9;
   private static readonly WIRE_ENDS = [
@@ -43,9 +41,6 @@ export class UtilityPole extends SceneObject implements Updatable, Powerable {
   private static readonly LAMP_GLOW = 6;
   private static readonly OFF_GLOW = 0.03;
   private static readonly SPOT = { distance: 14, angle: 0.75, penumbra: 0.6 };
-  private static readonly LED_RED = 0xff2233;
-  private static readonly LED_GREEN = 0x22ff88;
-  private static readonly LED_GLOW = 5;
 
   private readonly lamp = new MeshBasicMaterial({ color: UtilityPole.LAMP.color });
   private readonly spot = new SpotLight(
@@ -56,9 +51,6 @@ export class UtilityPole extends SceneObject implements Updatable, Powerable {
     UtilityPole.SPOT.penumbra,
     2,
   );
-  private readonly redLed = new MeshBasicMaterial({ color: UtilityPole.LED_RED });
-  private readonly greenLed = new MeshBasicMaterial({ color: UtilityPole.LED_GREEN });
-  private level = 0;
 
   /**
    * Crea el poste.
@@ -73,23 +65,10 @@ export class UtilityPole extends SceneObject implements Updatable, Powerable {
    * @inheritdoc
    */
   public setPower(level: number): void {
-    this.level = level;
     this.lamp.color
       .set(UtilityPole.LAMP.color)
       .multiplyScalar(Math.max(level * UtilityPole.LAMP_GLOW, UtilityPole.OFF_GLOW));
     this.spot.intensity = level * UtilityPole.LAMP.intensity;
-    this.greenLed.color
-      .set(UtilityPole.LED_GREEN)
-      .multiplyScalar(Math.max(level * UtilityPole.LED_GLOW, UtilityPole.OFF_GLOW));
-  }
-
-  /**
-   * @inheritdoc
-   */
-  public update(_delta: number, elapsed: number): void {
-    const blink =
-      Math.sin(elapsed * UtilityPole.LED.blinkSpeed) > 0 ? UtilityPole.LED_GLOW : UtilityPole.OFF_GLOW;
-    this.redLed.color.set(UtilityPole.LED_RED).multiplyScalar(this.level > 0 ? blink : UtilityPole.OFF_GLOW);
   }
 
   /**
@@ -107,7 +86,6 @@ export class UtilityPole extends SceneObject implements Updatable, Powerable {
     );
     this.buildArms();
     this.buildLamp();
-    this.buildPanel();
     this.buildWires();
     this.root.position.set(UtilityPole.BASE.x, 0, UtilityPole.BASE.z);
     this.setPower(0);
@@ -147,18 +125,6 @@ export class UtilityPole extends SceneObject implements Updatable, Powerable {
     this.add(this.spot, { x: armLength, y: y - height, z: 0 });
     this.spot.target.position.set(armLength + 1, 0, 2);
     this.add(this.spot.target);
-  }
-
-  /**
-   * Tablero de breakers con LED de estado (verde fijo, rojo intermitente).
-   */
-  private buildPanel(): void {
-    const { width, height, depth, y, z } = UtilityPole.PANEL;
-    this.box({ x: width, y: height, z: depth }, { x: 0, y, z }, this.materials.metal);
-    const { size, spacing, y: ledY } = UtilityPole.LED;
-    const front = z + depth / 2;
-    this.box({ x: size, y: size, z: size }, { x: -spacing, y: ledY, z: front }, this.greenLed);
-    this.box({ x: size, y: size, z: size }, { x: spacing, y: ledY, z: front }, this.redLed);
   }
 
   /**

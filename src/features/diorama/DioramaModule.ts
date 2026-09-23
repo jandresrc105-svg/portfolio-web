@@ -10,6 +10,7 @@ import { DioramaComponent } from './components/DioramaComponent';
 import { SectionNavComponent } from './components/SectionNavComponent';
 import { SoundToggleComponent } from './components/SoundToggleComponent';
 import { DioramaExperienceFactory } from './experience/DioramaExperienceFactory';
+import { BreakerPanelService } from './services/BreakerPanelService';
 import { PayPhoneService } from './services/PayPhoneService';
 import { ScopeControlService } from './services/ScopeControlService';
 import { ScopeService } from './services/ScopeService';
@@ -35,19 +36,31 @@ export class DioramaModule implements FeatureModule {
     container
       .singleton(ScopeService, () => new ScopeService())
       .singleton(PayPhoneService, () => new PayPhoneService())
+      .singleton(BreakerPanelService, () => new BreakerPanelService())
       .singleton(
         ScopeControlService,
         (c) => new ScopeControlService(c.resolve(PidLoopService), c.resolve(ScopeService)),
       )
-      .singleton(
-        DioramaExperienceFactory,
-        (c) =>
-          new DioramaExperienceFactory(
-            c.resolve(QualityDetector),
-            { instrument: c.resolve(ScopeControlService), phone: c.resolve(PayPhoneService) },
-            c.resolve(AudioEngine),
-          ),
-      );
+      .singleton(DioramaExperienceFactory, (c) => DioramaModule.experienceFactory(c));
+  }
+
+  /**
+   * Fábrica de la experiencia 3D con los equipos que el visitante usa.
+   *
+   * @param container Contenedor de dependencias.
+   * @returns Fábrica.
+   */
+  private static experienceFactory(container: Container): DioramaExperienceFactory {
+    const devices = {
+      instrument: container.resolve(ScopeControlService),
+      phone: container.resolve(PayPhoneService),
+      panel: container.resolve(BreakerPanelService),
+    };
+    return new DioramaExperienceFactory(
+      container.resolve(QualityDetector),
+      devices,
+      container.resolve(AudioEngine),
+    );
   }
 
   /**
@@ -74,6 +87,7 @@ export class DioramaModule implements FeatureModule {
       container.resolve(DioramaExperienceFactory),
       container.resolve(SectionNavigator),
       container.resolve(AppEventBus),
+      container.resolve(BreakerPanelService),
       {
         boot: container.resolve(BootScreenComponent),
         soundToggle: container.resolve(SoundToggleComponent),
