@@ -27,6 +27,7 @@ export class ProxyBatch {
   public readonly mesh: Mesh;
 
   private readonly entries: ProxyEntry[];
+  private readonly ranges = new Map<Mesh, { start: number; count: number }>();
   private readonly current: Float32Array;
 
   /**
@@ -43,6 +44,7 @@ export class ProxyBatch {
   ) {
     this.current = new Float32Array(kind === 'lit' ? ProxyBatch.LIT_STRIDE : ProxyBatch.BASIC_STRIDE);
     this.entries = ProxyBatch.group(sources, this.current.length);
+    this.index(sources);
     this.mesh = new Mesh(this.geometry(sources), this.material(sources));
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrixWorldAutoUpdate = false;
@@ -68,12 +70,42 @@ export class ProxyBatch {
   }
 
   /**
+   * Apaga en el lote los vértices de una malla (que ahora se dibuja como original).
+   *
+   * @param mesh Malla original.
+   */
+  public drop(mesh: Mesh): void {
+    const range = this.ranges.get(mesh);
+    if (!range) {
+      return;
+    }
+    const attribute = this.mesh.geometry.getAttribute('proxyVisible') as BufferAttribute;
+    (attribute.array as Float32Array).fill(0, range.start, range.start + range.count);
+    attribute.addUpdateRange(range.start, range.count);
+    attribute.needsUpdate = true;
+  }
+
+  /**
    * Libera la geometría y el material del lote.
    */
   public dispose(): void {
     this.mesh.geometry.dispose();
     (this.mesh.material as Material).dispose();
     this.atlas?.texture.dispose();
+  }
+
+  /**
+   * Anota el rango de vértices de cada malla en la geometría unida.
+   *
+   * @param sources Mallas originales, en el orden en que se unen.
+   */
+  private index(sources: readonly Mesh[]): void {
+    let start = 0;
+    sources.forEach((mesh) => {
+      const count = mesh.geometry.getAttribute('position').count;
+      this.ranges.set(mesh, { start, count });
+      start += count;
+    });
   }
 
   /**
@@ -107,6 +139,7 @@ export class ProxyBatch {
     const attribute = (size: number): BufferAttribute =>
       new BufferAttribute(new Float32Array(count * size), size);
     part.setAttribute('color', attribute(ProxyBatch.RGB));
+    part.setAttribute('proxyVisible', new BufferAttribute(new Float32Array(count).fill(1), 1));
     this.remap(part, mesh);
     if (this.kind === 'lit') {
       part.setAttribute('proxyEmissive', attribute(ProxyBatch.RGB));

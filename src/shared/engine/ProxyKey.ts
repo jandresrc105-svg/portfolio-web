@@ -21,7 +21,7 @@ import type { ProxyKind } from './ProxyKind';
  */
 export class ProxyKey {
   private static readonly CAMERA_ONLY = 1;
-  private static readonly RESERVED = ['color', 'proxyEmissive', 'proxyRoughMetal'];
+  private static readonly RESERVED = ['color', 'proxyEmissive', 'proxyRoughMetal', 'proxyVisible'];
   private static readonly PHYSICAL = 'MeshPhysicalMaterial';
 
   private readonly inside = new WeakMap<BufferGeometry, boolean>();

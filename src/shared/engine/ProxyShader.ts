@@ -33,7 +33,12 @@ export class ProxyShader {
     '#include <metalnessmap_fragment>',
     '#undef metalness',
   ].join('\n');
-  private static readonly CACHE_KEY = 'proxy-lit';
+  private static readonly VISIBILITY_HEAD = 'attribute float proxyVisible;';
+  private static readonly VISIBILITY_BODY = [
+    '#include <project_vertex>',
+    'if ( proxyVisible < 0.5 ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );',
+  ].join('\n');
+  private static readonly CACHE_KEY = { lit: 'proxy-lit', basic: 'proxy-basic' };
   private static readonly WHITE = 0xffffff;
   private static readonly BLACK = 0x000000;
 
@@ -51,12 +56,12 @@ export class ProxyShader {
     material.onBeforeCompile = (shader): void => {
       this.inject(shader);
     };
-    material.customProgramCacheKey = (): string => ProxyShader.CACHE_KEY;
+    material.customProgramCacheKey = (): string => ProxyShader.CACHE_KEY.lit;
     return material;
   }
 
   /**
-   * Material sin iluminación de un lote: el color sale del vértice.
+   * Material sin iluminación de un lote: el color sale del vértice y cada malla se puede apagar.
    *
    * @param template Material original.
    * @returns Material del lote.
@@ -65,7 +70,24 @@ export class ProxyShader {
     const material = template.clone();
     material.color.set(ProxyShader.WHITE);
     material.vertexColors = true;
+    material.onBeforeCompile = (shader): void => {
+      this.hideable(shader);
+    };
+    material.customProgramCacheKey = (): string => ProxyShader.CACHE_KEY.basic;
     return material;
+  }
+
+  /**
+   * Agrega el apagado por vértice: los triángulos de una malla apagada (`proxyVisible` 0) se mandan fuera de
+   * la pantalla y la GPU los descarta, así una parte que se mueve se saca del lote sin rearmarlo.
+   *
+   * @param shader Programa que three.js está por compilar.
+   */
+  private hideable(shader: WebGLProgramParametersWithUniforms): void {
+    shader.vertexShader = `${ProxyShader.VISIBILITY_HEAD}\n${shader.vertexShader}`.replace(
+      '#include <project_vertex>',
+      ProxyShader.VISIBILITY_BODY,
+    );
   }
 
   /**
@@ -74,6 +96,7 @@ export class ProxyShader {
    * @param shader Programa que three.js está por compilar.
    */
   private inject(shader: WebGLProgramParametersWithUniforms): void {
+    this.hideable(shader);
     shader.vertexShader = `${ProxyShader.VERTEX_HEAD}\n${shader.vertexShader}`.replace(
       '#include <begin_vertex>',
       ProxyShader.VERTEX_BODY,

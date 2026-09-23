@@ -1,16 +1,8 @@
-import {
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  MeshStandardMaterial,
-  type Material,
-  type Object3D,
-  type Scene,
-  type Texture,
-} from 'three';
-import { ProxyAtlas } from './ProxyAtlas';
-import { ProxyBatch } from './ProxyBatch';
+import { Group, Mesh, type Material, type Object3D, type Scene } from 'three';
+import type { ProxyBatch } from './ProxyBatch';
+import { ProxyBuilder } from './ProxyBuilder';
 import { ProxyCover } from './ProxyCover';
+import type { ProxyGroup } from './ProxyGroup';
 import { ProxyKey } from './ProxyKey';
 import type { ProxyKind } from './ProxyKind';
 import type { ProxySource } from './ProxySource';
@@ -26,26 +18,28 @@ import type { Updatable } from './Updatable';
  * enciende se ven igual. Lo que no se puede unir sin cambiar el resultado (transparencias, shaders propios,
  * instancias, lo que se refleja en los charcos) y lo que se mueve (`keep`) sigue dibujándose como siempre.
  *
- * Al activarse revisa si algo cambió desde la última vez y, si es así, se rearma. Durante sus primeros segundos
- * vigila la zona: lo que se mueve solo (un servo) pasa a dibujarse como original, y cuando todo está quieto
- * avisa qué piezas pueden dejar de recalcular sus matrices ({@link SceneProxy.onSettled}). Los subárboles que
- * cubre por completo se ocultan enteros para que three.js ni los recorra.
+ * Al activarse revisa si algo cambió desde la última vez y rearma solo los grupos afectados (los demás se
+ * reutilizan). Durante sus primeros segundos vigila la zona: lo que se mueve solo (un servo) pasa a dibujarse
+ * como original, y cuando todo está quieto avisa qué piezas pueden dejar de recalcular sus matrices
+ * ({@link SceneProxy.onSettled}). Los subárboles que cubre por completo se ocultan enteros para que three.js ni
+ * los recorra.
  */
 export class SceneProxy implements Updatable {
   private static readonly REASON = 'proxy';
   private static readonly CHECK_EVERY = 30;
   private static readonly QUIET_CHECKS = 3;
-  private static readonly ATLAS = { scale: 0.5, size: 4096 };
 
   private readonly group = new Group();
   private readonly keys = new ProxyKey();
+  private readonly builder = new ProxyBuilder(this.keys);
   private readonly cover = new ProxyCover();
   private readonly watch = new ProxyWatch();
   private readonly moving = new Set<Object3D>();
+  private readonly dropped = new Set<Mesh>();
   private readonly settledListeners: ((still: Object3D[]) => void)[] = [];
-  private batches: ProxyBatch[] = [];
-  private sources: ProxySource[] = [];
+  private groups = new Map<string, ProxyGroup>();
   private active = false;
+  private built = false;
   private frame = 0;
   private quiet = 0;
 
@@ -80,13 +74,13 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Cambia a la versión unida (rearmándola si algo cambió).
+   * Cambia a la versión unida (rearmando los grupos que cambiaron).
    */
   public activate(): void {
     if (this.active) {
       return;
     }
-    if (this.batches.length === 0 || this.changed().length > 0) {
+    if (!this.built || this.changed().length > 0) {
       this.rebuild();
     }
     this.conceal();
@@ -120,7 +114,7 @@ export class SceneProxy implements Updatable {
     if (this.quiet < SceneProxy.QUIET_CHECKS && this.frame % SceneProxy.CHECK_EVERY === 0) {
       this.learn();
     }
-    this.batches.forEach((batch) => {
+    this.batches().forEach((batch) => {
       batch.sync();
     });
   }
@@ -130,7 +124,10 @@ export class SceneProxy implements Updatable {
    */
   public dispose(): void {
     this.reveal();
-    this.clear();
+    this.groups.forEach((group) => {
+      SceneProxy.release(group);
+    });
+    this.groups.clear();
     this.group.removeFromParent();
   }
 
@@ -142,10 +139,7 @@ export class SceneProxy implements Updatable {
     const changed = this.changed();
     const moved = this.watch.check();
     if (changed.length > 0) {
-      changed.forEach((mesh) => this.moving.add(mesh));
-      this.reveal();
-      this.rebuild();
-      this.conceal();
+      this.drop(changed);
     }
     this.quiet = moved || changed.length > 0 ? 0 : this.quiet + 1;
     if (this.quiet === SceneProxy.QUIET_CHECKS) {
@@ -154,99 +148,71 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Arma los lotes con el estado actual de las piezas y calcula qué subárboles cubren.
+   * Saca de los lotes (sin rearmarlos) mallas que se mueven: se apagan sus vértices y vuelven a dibujarse como
+   * originales. En el siguiente rearmado ya no entran.
+   *
+   * @param meshes Mallas que se movieron.
+   */
+  private drop(meshes: readonly Mesh[]): void {
+    this.cover.show();
+    meshes.forEach((mesh) => {
+      this.moving.add(mesh);
+      this.dropped.add(mesh);
+      this.batches().forEach((batch) => {
+        batch.drop(mesh);
+      });
+      this.gate.show(mesh, SceneProxy.REASON);
+    });
+    this.cover.compute(this.roots, new Set(this.live().map(({ mesh }) => mesh)));
+    this.cover.hide();
+  }
+
+  /**
+   * Arma los grupos con el estado actual de las piezas: reutiliza los que no cambiaron y arma los demás.
    */
   private rebuild(): void {
-    this.clear();
     this.roots.forEach((root) => {
       root.updateMatrixWorld(true);
     });
-    this.collect().forEach(({ kind, meshes }) => {
-      this.add(kind, meshes);
-    });
-    this.cover.compute(this.roots, new Set(this.sources.map(({ mesh }) => mesh)));
-  }
-
-  /**
-   * Agrega un lote (si tiene más de una malla, si no no gana nada) y guarda cómo estaban sus originales.
-   *
-   * @param kind Tipo de lote.
-   * @param meshes Mallas originales.
-   */
-  private add(kind: ProxyKind, meshes: Mesh[]): void {
-    if (meshes.length < 2) {
-      return;
-    }
-    const [first] = meshes;
-    if (first && this.keys.atlased(first)) {
-      this.chunks(meshes).forEach((chunk) => {
-        this.batch(
-          kind,
-          chunk,
-          new ProxyAtlas(this.texturesOf(chunk), SceneProxy.ATLAS.scale, SceneProxy.ATLAS.size),
-        );
-      });
-      return;
-    }
-    this.batch(kind, meshes, null);
-  }
-
-  /**
-   * Parte un grupo de mallas con textura en tandas cuyas texturas quepan en un atlas.
-   *
-   * @param meshes Mallas del grupo.
-   * @returns Tandas.
-   */
-  private chunks(meshes: Mesh[]): Mesh[][] {
-    const chunks: Mesh[][] = [[]];
-    meshes.forEach((mesh) => {
-      const current = chunks[chunks.length - 1] ?? [];
-      const textures = this.texturesOf([...current, mesh]);
-      if (current.length > 0 && !ProxyAtlas.fits(textures, SceneProxy.ATLAS.scale, SceneProxy.ATLAS.size)) {
-        chunks.push([mesh]);
-      } else {
-        current.push(mesh);
+    const previous = this.groups;
+    this.groups = new Map();
+    this.collect().forEach(({ kind, meshes }, key) => {
+      const old = previous.get(key);
+      if (old && this.reusable(old, meshes)) {
+        previous.delete(key);
+        this.groups.set(key, old);
+      } else if (meshes.length > 1) {
+        this.groups.set(key, this.builder.build(kind, meshes));
       }
     });
-    return chunks;
+    previous.forEach((group) => {
+      SceneProxy.release(group);
+    });
+    this.mount();
   }
 
   /**
-   * Texturas de color (sin repetir) de unas mallas.
-   *
-   * @param meshes Mallas.
-   * @returns Texturas.
+   * Pone en la escena los lotes vigentes y calcula qué subárboles cubren.
    */
-  private texturesOf(meshes: readonly Mesh[]): Texture[] {
-    const maps = meshes.map((mesh) => SceneProxy.mapOf(mesh.material as Material));
-    return [...new Set(maps.filter((map): map is Texture => map !== null))];
+  private mount(): void {
+    this.dropped.clear();
+    this.group.clear();
+    this.batches().forEach((batch) => this.group.add(batch.mesh));
+    this.cover.compute(this.roots, new Set(this.sources().map(({ mesh }) => mesh)));
+    this.built = true;
   }
 
   /**
-   * Crea un lote y guarda cómo estaban sus originales.
+   * Si un grupo ya armado sirve tal cual: las mismas mallas, en el mismo orden, y ninguna cambió.
    *
-   * @param kind Tipo de lote.
-   * @param meshes Mallas originales.
-   * @param atlas Atlas de sus texturas, o `null`.
+   * @param group Grupo armado.
+   * @param meshes Mallas del grupo ahora.
+   * @returns `true` si se puede reutilizar.
    */
-  private batch(kind: ProxyKind, meshes: Mesh[], atlas: ProxyAtlas | null): void {
-    if (meshes.length < 2) {
-      atlas?.texture.dispose();
-      return;
-    }
-    try {
-      const batch = new ProxyBatch(kind, meshes, atlas);
-      this.batches.push(batch);
-      this.group.add(batch.mesh);
-      meshes.forEach((mesh) => {
-        const material = mesh.material as Material;
-        const map = SceneProxy.mapOf(material);
-        const matrix = mesh.matrixWorld.clone();
-        this.sources.push({ mesh, matrix, material, map, version: map?.version ?? 0, visible: mesh.visible });
-      });
-    } catch {
-      return;
-    }
+  private reusable(group: ProxyGroup, meshes: readonly Mesh[]): boolean {
+    const same =
+      group.meshes.length === meshes.length && group.meshes.every((mesh, index) => mesh === meshes[index]);
+    return same && group.sources.every((source) => !this.differs(source));
   }
 
   /**
@@ -288,13 +254,42 @@ export class SceneProxy implements Updatable {
   }
 
   /**
+   * Lotes de todos los grupos.
+   *
+   * @returns Lotes.
+   */
+  private batches(): ProxyBatch[] {
+    return [...this.groups.values()].flatMap((group) => group.batches);
+  }
+
+  /**
+   * Mallas originales en los lotes, con su estado copiado.
+   *
+   * @returns Estados copiados.
+   */
+  private sources(): ProxySource[] {
+    return [...this.groups.values()].flatMap((group) => group.sources);
+  }
+
+  /**
+   * Mallas originales que siguen dibujándose desde los lotes (sin las que se apagaron por moverse).
+   *
+   * @returns Estados copiados.
+   */
+  private live(): ProxySource[] {
+    return this.sources().filter(({ mesh }) => !this.dropped.has(mesh));
+  }
+
+  /**
    * Mallas originales que se movieron, se ocultaron o cambiaron de material o de textura desde que se armaron
-   * los lotes.
+   * sus lotes.
    *
    * @returns Mallas que cambiaron.
    */
   private changed(): Mesh[] {
-    return this.sources.filter((source) => this.differs(source)).map(({ mesh }) => mesh);
+    return this.live()
+      .filter((source) => this.differs(source))
+      .map(({ mesh }) => mesh);
   }
 
   /**
@@ -306,7 +301,7 @@ export class SceneProxy implements Updatable {
   private differs(source: ProxySource): boolean {
     const { mesh, matrix, material, map, version, visible } = source;
     const current = mesh.material as Material;
-    const texture = SceneProxy.mapOf(current);
+    const texture = ProxyBuilder.mapOf(current);
     if (current !== material || texture !== map || (texture?.version ?? 0) !== version) {
       return true;
     }
@@ -318,7 +313,7 @@ export class SceneProxy implements Updatable {
    * Saca del render las mallas originales (y oculta los subárboles que los lotes cubren por completo).
    */
   private conceal(): void {
-    this.sources.forEach(({ mesh }) => {
+    this.live().forEach(({ mesh }) => {
       this.gate.hide(mesh, SceneProxy.REASON);
     });
     this.cover.hide();
@@ -329,7 +324,7 @@ export class SceneProxy implements Updatable {
    */
   private reveal(): void {
     this.cover.show();
-    this.sources.forEach(({ mesh }) => {
+    this.sources().forEach(({ mesh }) => {
       this.gate.show(mesh, SceneProxy.REASON);
     });
   }
@@ -346,26 +341,13 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Quita los lotes actuales.
+   * Libera los lotes de un grupo que ya no se usa.
+   *
+   * @param group Grupo.
    */
-  private clear(): void {
-    this.batches.forEach((batch) => {
+  private static release(group: ProxyGroup): void {
+    group.batches.forEach((batch) => {
       batch.dispose();
     });
-    this.batches = [];
-    this.sources = [];
-    this.group.clear();
-  }
-
-  /**
-   * Textura de color de un material (si tiene).
-   *
-   * @param material Material.
-   * @returns Textura o `null`.
-   */
-  private static mapOf(material: Material): Texture | null {
-    return material instanceof MeshStandardMaterial || material instanceof MeshBasicMaterial
-      ? material.map
-      : null;
   }
 }
