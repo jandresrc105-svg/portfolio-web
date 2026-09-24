@@ -69,9 +69,16 @@ export class ProxyBatch {
    * Copia a los vértices los valores de los materiales originales que cambiaron.
    *
    * @param force Reescribir todo aunque no haya cambios.
+   * @param share Parte de los materiales que se revisa en este frame: `every` indica cada cuántos (1 = todos)
+   * y `turn`, el frame actual, cuáles tocan (así en las zonas que no se usan la revisión se reparte).
+   * @param share.every Cada cuántos materiales se revisa uno.
+   * @param share.turn Frame actual.
    */
-  public sync(force = false): void {
-    this.entries.forEach((entry) => {
+  public sync(force = false, share = { every: 1, turn: 0 }): void {
+    this.entries.forEach((entry, index) => {
+      if (!force && (index + share.turn) % share.every !== 0) {
+        return;
+      }
       this.read(entry.material);
       if (!force && this.current.every((value, index) => value === entry.last[index])) {
         return;

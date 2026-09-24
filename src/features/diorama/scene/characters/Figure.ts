@@ -198,7 +198,7 @@ export abstract class Figure extends SceneObject implements Updatable {
    * @param pole Dirección hacia la que se dobla el codo, en espacio del personaje.
    */
   protected reach(limb: FigureLimb, target: Vector3Like, pole: Vector3Like): void {
-    this.root.updateMatrixWorld(true);
+    this.root.updateMatrixWorld();
     this.root.worldToLocal(limb.upper.getWorldPosition(this.start));
     const upper = limb.lower.position.length();
     const lower = limb.end.position.length();
@@ -224,7 +224,7 @@ export abstract class Figure extends SceneObject implements Updatable {
    * @param target Punto, en espacio del personaje.
    */
   protected aim(joint: Object3D, target: Vector3Like): void {
-    this.root.updateMatrixWorld(true);
+    this.root.updateMatrixWorld();
     joint.getWorldPosition(this.origin);
     this.current.copy(Figure.DOWN).applyQuaternion(joint.getWorldQuaternion(this.world)).normalize();
     this.root.localToWorld(this.desired.copy(target)).sub(this.origin).normalize();

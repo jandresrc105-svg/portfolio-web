@@ -147,8 +147,9 @@ export class SceneProxy implements Updatable {
       return;
     }
     this.detect();
+    const share = { every: this.stride, turn: this.frame };
     this.batches.forEach((batch) => {
-      batch.sync();
+      batch.sync(false, share);
     });
     this.frame += 1;
     if (this.refreshAt > 0 && this.frame >= this.refreshAt) {

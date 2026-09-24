@@ -161,7 +161,7 @@ export class Chef extends Figure {
    * Lleva el cucharón en la mano derecha, con el mango hacia arriba y la copa dentro de la olla.
    */
   private holdLadle(): void {
-    this.root.updateMatrixWorld(true);
+    this.root.updateMatrixWorld();
     this.joints.armRight.end.getWorldPosition(this.hand);
     this.root.worldToLocal(this.hand);
     this.hand.y += Chef.LADLE.grip;
@@ -173,7 +173,7 @@ export class Chef extends Figure {
    * Deja el cucharón apoyado dentro de la olla (posición fija en el mundo) mientras el cocinero saluda.
    */
   private restLadle(): void {
-    this.root.updateMatrixWorld(true);
+    this.root.updateMatrixWorld();
     this.ladle.position.copy(this.root.worldToLocal(this.hand.copy(Chef.LADLE.rest)));
     this.ladle.rotation.y = Math.PI - this.root.rotation.y;
   }
