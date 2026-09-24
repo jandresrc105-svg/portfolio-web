@@ -3,33 +3,35 @@ import type { MeshBasicMaterial, MeshStandardMaterial, WebGLProgramParametersWit
 /**
  * Materiales de los lotes de la versión unida. Son copias exactas del material original (mismos mapas, lados,
  * entorno y tono), salvo que lo que cambia con el tiempo viene por vértice: el color (atributo `color`, que
- * three.js ya multiplica), el brillo emisivo (`proxyEmissive`) y la rugosidad y el metal (`proxyRoughMetal`).
+ * three.js ya multiplica), el brillo emisivo (`proxyEmissive`) y la rugosidad y el metal (`proxySurface`). El
+ * reflejo del entorno queda como uniforme: con el entorno de la escena, three.js usa para todos la intensidad de
+ * la escena (no la del material).
  * En el shader solo se cambia de dónde salen esos tres valores; el resto del cálculo de luz es el de three.js,
  * así que el resultado en pantalla es el mismo.
  */
 export class ProxyShader {
   private static readonly VERTEX_HEAD = [
     'attribute vec3 proxyEmissive;',
-    'attribute vec2 proxyRoughMetal;',
+    'attribute vec2 proxySurface;',
     'varying vec3 vProxyEmissive;',
-    'varying vec2 vProxyRoughMetal;',
+    'varying vec2 vProxySurface;',
   ].join('\n');
   private static readonly VERTEX_BODY = [
     '#include <begin_vertex>',
     'vProxyEmissive = proxyEmissive;',
-    'vProxyRoughMetal = proxyRoughMetal;',
+    'vProxySurface = proxySurface;',
   ].join('\n');
   private static readonly FRAGMENT_HEAD = [
     'varying vec3 vProxyEmissive;',
-    'varying vec2 vProxyRoughMetal;',
+    'varying vec2 vProxySurface;',
   ].join('\n');
   private static readonly ROUGHNESS = [
-    '#define roughness vProxyRoughMetal.x',
+    '#define roughness vProxySurface.x',
     '#include <roughnessmap_fragment>',
     '#undef roughness',
   ].join('\n');
   private static readonly METALNESS = [
-    '#define metalness vProxyRoughMetal.y',
+    '#define metalness vProxySurface.y',
     '#include <metalnessmap_fragment>',
     '#undef metalness',
   ].join('\n');

@@ -22,10 +22,11 @@ import { ProxyShader } from './ProxyShader';
  */
 export class ProxyBatch {
   private static readonly LIT_STRIDE = 8;
+  private static readonly LAYOUT = { emissive: 3, surface: 6 };
   private static readonly BASIC_STRIDE = 3;
   private static readonly RGB = 3;
-  private static readonly PAIR = 2;
   private static readonly TRIANGLE = 3;
+  private static readonly SURFACE = 2;
   private static readonly RIG = new ProxyRig();
 
   public readonly mesh: Mesh;
@@ -166,7 +167,7 @@ export class ProxyBatch {
     this.remap(part, mesh);
     if (this.kind === 'lit') {
       part.setAttribute('proxyEmissive', attribute(ProxyBatch.RGB));
-      part.setAttribute('proxyRoughMetal', attribute(ProxyBatch.PAIR));
+      part.setAttribute('proxySurface', attribute(ProxyBatch.SURFACE));
     }
     return part;
   }
@@ -217,14 +218,17 @@ export class ProxyBatch {
    */
   private read(material: Material): void {
     const values = this.current;
+    const { emissive: glowAt, surface } = ProxyBatch.LAYOUT;
     if (material instanceof MeshStandardMaterial) {
-      const { color, emissive, emissiveIntensity, roughness, metalness } = material;
-      values.set([color.r, color.g, color.b, emissive.r * emissiveIntensity, emissive.g * emissiveIntensity]);
-      values.set([emissive.b * emissiveIntensity, roughness, metalness], ProxyBatch.RGB + ProxyBatch.PAIR);
+      const { color, emissive, emissiveIntensity: glow } = material;
+      ProxyBatch.put(values, 0, color.r, color.g, color.b);
+      ProxyBatch.put(values, glowAt, emissive.r * glow, emissive.g * glow, emissive.b * glow);
+      values[surface] = material.roughness;
+      values[surface + 1] = material.metalness;
       return;
     }
     const { color } = material as MeshBasicMaterial;
-    values.set([color.r, color.g, color.b]);
+    ProxyBatch.put(values, 0, color.r, color.g, color.b);
   }
 
   /**
@@ -237,13 +241,9 @@ export class ProxyBatch {
     const values = this.current;
     this.fill('color', start, count, values.subarray(0, ProxyBatch.RGB));
     if (this.kind === 'lit') {
-      this.fill(
-        'proxyEmissive',
-        start,
-        count,
-        values.subarray(ProxyBatch.RGB, ProxyBatch.RGB * ProxyBatch.PAIR),
-      );
-      this.fill('proxyRoughMetal', start, count, values.subarray(ProxyBatch.RGB * ProxyBatch.PAIR));
+      const { emissive, surface } = ProxyBatch.LAYOUT;
+      this.fill('proxyEmissive', start, count, values.subarray(emissive, surface));
+      this.fill('proxySurface', start, count, values.subarray(surface));
     }
   }
 
@@ -341,5 +341,20 @@ export class ProxyBatch {
       start += count;
     });
     return [...entries.values()];
+  }
+
+  /**
+   * Copia tres valores en un arreglo, sin reservar memoria nueva.
+   *
+   * @param values Arreglo destino.
+   * @param at Posición del primero.
+   * @param x Primer valor.
+   * @param y Segundo valor.
+   * @param z Tercer valor.
+   */
+  private static put(values: Float32Array, at: number, x: number, y: number, z: number): void {
+    values[at] = x;
+    values[at + 1] = y;
+    values[at + 2] = z;
   }
 }

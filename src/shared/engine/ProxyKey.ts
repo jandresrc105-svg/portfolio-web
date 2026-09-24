@@ -23,7 +23,7 @@ import type { RenderGate } from './RenderGate';
  */
 export class ProxyKey {
   private static readonly OWN_LAYERS = (1 << RenderLayer.Default) | (1 << RenderLayer.Reflected);
-  private static readonly RESERVED = ['color', 'proxyEmissive', 'proxyRoughMetal', 'proxyVisible'];
+  private static readonly RESERVED = ['color', 'proxyEmissive', 'proxySurface', 'proxyVisible'];
   private static readonly PHYSICAL = 'MeshPhysicalMaterial';
 
   private readonly inside = new WeakMap<BufferGeometry, boolean>();
@@ -169,12 +169,13 @@ export class ProxyKey {
       material.metalnessMap,
     ];
     const more = [material.emissiveMap, material.aoMap, material.bumpMap, material.lightMap, material.envMap];
-    const { envMapIntensity, flatShading, fog, toneMapped, opacity, normalScale } = material;
+    const { flatShading, fog, toneMapped, opacity, normalScale } = material;
+    const reflection = material.envMap ? material.envMapIntensity : '-';
     const scales = [normalScale.x, normalScale.y, material.aoMapIntensity, material.bumpScale];
     return [
       atlas ? `atlas:${material.map?.colorSpace ?? ''}` : '-',
       ...[...maps, ...more].map((texture) => this.texture(texture)),
-      ...[envMapIntensity, flatShading, fog, toneMapped, opacity, ...scales, material.lightMapIntensity],
+      ...[reflection, flatShading, fog, toneMapped, opacity, ...scales, material.lightMapIntensity],
     ];
   }
 
