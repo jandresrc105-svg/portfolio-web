@@ -53,6 +53,7 @@ export class TrafficSignal extends SceneObject implements Updatable, Powerable {
   };
   private readonly art: CrossingSignalArt;
   private readonly chirpListeners: (() => void)[] = [];
+  private readonly glows = new Map<MeshBasicMaterial, number>();
   private power = 0;
   private chirp = 0;
 
@@ -185,8 +186,12 @@ export class TrafficSignal extends SceneObject implements Updatable, Powerable {
    * @param lit Si le toca estar encendida.
    */
   private light(material: MeshBasicMaterial, color: number, lit: boolean): void {
-    const glow = lit ? TrafficSignal.GLOW * this.power : 0;
-    material.color.set(color).multiplyScalar(Math.max(glow, TrafficSignal.OFF_GLOW));
+    const glow = Math.max(lit ? TrafficSignal.GLOW * this.power : 0, TrafficSignal.OFF_GLOW);
+    if (this.glows.get(material) === glow) {
+      return;
+    }
+    this.glows.set(material, glow);
+    material.color.set(color).multiplyScalar(glow);
   }
 
   /**

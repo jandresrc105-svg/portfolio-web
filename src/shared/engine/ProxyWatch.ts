@@ -1,9 +1,10 @@
 import { Line, Mesh, Points, Sprite, type Matrix4, type Object3D } from 'three';
 
 /**
- * Vigila, durante los primeros segundos de la versión unida, qué se mueve en la zona (cualquier cosa que se
- * dibuje, esté o no en los lotes). Las piezas donde nada se movió pueden dejar de recalcular sus matrices
- * mientras la versión unida siga activa; las que tienen algo en movimiento (un servo, un giro interno) no.
+ * Vigila qué se mueve en la zona (cualquier cosa que se dibuje, esté o no en los lotes). Las piezas donde nada
+ * se movió pueden dejar de recalcular sus matrices mientras la versión unida siga activa; las que tienen algo
+ * en movimiento (un servo, un giro interno) no. Una pieza que se movió una vez queda inquieta hasta que se
+ * vuelva a empezar, y ya no se revisa.
  */
 export class ProxyWatch {
   private watched: { node: Object3D; matrix: Matrix4; root: Object3D }[] = [];
@@ -27,19 +28,20 @@ export class ProxyWatch {
   }
 
   /**
-   * Revisa qué se movió desde la última revisión y anota su pieza como inquieta.
+   * Revisa qué se movió desde la última revisión en las piezas que siguen quietas y anota su pieza como
+   * inquieta.
    *
-   * @returns `true` si algo se movió.
+   * @returns `true` si alguna pieza pasó a estar inquieta.
    */
   public check(): boolean {
     let moved = false;
-    this.watched.forEach((entry) => {
-      if (!entry.node.matrixWorld.equals(entry.matrix)) {
+    for (const entry of this.watched) {
+      if (!this.restless.has(entry.root) && !entry.node.matrixWorld.equals(entry.matrix)) {
         entry.matrix.copy(entry.node.matrixWorld);
         this.restless.add(entry.root);
         moved = true;
       }
-    });
+    }
     return moved;
   }
 

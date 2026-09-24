@@ -23,6 +23,19 @@ export class RenderGate {
   }
 
   /**
+   * Si el objeto está fuera del render por alguna razón distinta de la indicada (mientras tanto, lo que decida
+   * esa razón no cambia nada en pantalla).
+   *
+   * @param object Objeto.
+   * @param reason Razón que no se cuenta.
+   * @returns `true` si otra razón lo saca del render.
+   */
+  public hiddenBesides(object: Object3D, reason: string): boolean {
+    const set = this.reasons.get(object);
+    return set !== undefined && (set.size > 1 || !set.has(reason));
+  }
+
+  /**
    * Saca un objeto del render por una razón.
    *
    * @param object Objeto.

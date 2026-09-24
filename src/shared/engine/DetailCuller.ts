@@ -22,7 +22,9 @@ import type { Updatable } from './Updatable';
  * por su parte más grande, así desde lejos desaparece igual que sus partes sueltas. La revisión se reparte:
  * cada frame mide una parte de las mallas (un tercio con la cámara en movimiento, un sexto quieta), así
  * arrastrar la cámara no cuesta una pasada completa por frame; un detalle de un píxel que aparece dos frames
- * tarde no se nota.
+ * tarde no se nota. Lo que ya está fuera del render por otra razón (una malla que se dibuja desde la versión
+ * unida de su zona) no se mide: se deja sin descartar, así si vuelve a dibujarse sola (p. ej. porque se movió)
+ * aparece en el acto, y lo peor que puede pasar es que un detalle diminuto se vea unos frames de más.
  */
 export class DetailCuller implements Updatable {
   private static readonly MIN_PIXELS = 1.2;
@@ -106,7 +108,7 @@ export class DetailCuller implements Updatable {
    */
   private evaluate(entry: { mesh: Mesh; radius: number; center: Vector3 }, scale: number): void {
     const { mesh, radius, center } = entry;
-    if (DetailCuller.glows(mesh.material as Material)) {
+    if (this.gate.hiddenBesides(mesh, DetailCuller.REASON) || DetailCuller.glows(mesh.material as Material)) {
       this.gate.show(mesh, DetailCuller.REASON);
       return;
     }

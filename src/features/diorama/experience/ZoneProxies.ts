@@ -1,4 +1,5 @@
 import type { Object3D, Scene } from 'three';
+import { PoseJournal } from '@shared/engine/PoseJournal';
 import type { RenderGate } from '@shared/engine/RenderGate';
 import { SceneProxy } from '@shared/engine/SceneProxy';
 import type { Updatable } from '@shared/engine/Updatable';
@@ -77,11 +78,12 @@ export class ZoneProxies implements Updatable {
   }
 
   /**
-   * @inheritdoc
+   * Actualiza las dos zonas y vacía el registro de poses recompuestas (ya lo leyeron las dos).
    */
   public update(): void {
     this.workshop.update();
     this.street.update();
+    PoseJournal.shared.clear();
   }
 
   /**

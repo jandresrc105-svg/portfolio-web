@@ -1,4 +1,5 @@
 import { Object3D } from 'three';
+import { PoseJournal } from './PoseJournal';
 
 /**
  * Recompone la matriz local de un objeto solo si su pose cambió. three.js recompone la matriz (posición,
@@ -7,7 +8,9 @@ import { Object3D } from 'three';
  * padre: si nada cambió, no se recompone ni se marca, y la matriz del mundo solo se recalcula si cambió algo
  * más arriba. Se instala una vez para todos los objetos (también los que se piden a mitad de una animación, como
  * la cinemática inversa de los personajes, que siguen viendo sus matrices al día). Un objeto con pivote se
- * recompone siempre, como en three.js.
+ * recompone siempre, como en three.js. Cada recomposición se anota en el {@link PoseJournal}, igual que cada
+ * cambio en la estructura de la escena (agregar, quitar o mover un objeto de padre), para que las tablas de
+ * poses de las piezas ({@link PoseTable}) sepan cuándo volver a armarse.
  */
 export class PoseCheck {
   private static readonly SIZE = 10;
@@ -27,11 +30,14 @@ export class PoseCheck {
     PoseCheck.installed = true;
     const compose = Reflect.get(Object3D.prototype, 'updateMatrix');
     const changed = (object: Object3D): boolean => object.pivot !== null || this.changed(object);
+    const journal = PoseJournal.shared;
     Object3D.prototype.updateMatrix = function updateMatrix(this: Object3D): void {
       if (changed(this)) {
         compose.call(this);
+        journal.record(this);
       }
     };
+    PoseCheck.watchStructure(journal);
   }
 
   /**
@@ -91,5 +97,21 @@ export class PoseCheck {
     values[s] = scale.x;
     values[s + 1] = scale.y;
     values[s + 2] = scale.z;
+  }
+
+  /**
+   * Anota en el registro cada cambio de estructura de la escena (agregar, quitar o cambiar de padre un objeto).
+   *
+   * @param journal Registro de poses.
+   */
+  private static watchStructure(journal: PoseJournal): void {
+    const prototype = Object3D.prototype;
+    (['add', 'remove', 'attach'] as const).forEach((name) => {
+      const original = Reflect.get(prototype, name) as (this: Object3D, ...objects: Object3D[]) => Object3D;
+      Reflect.set(prototype, name, function restructure(this: Object3D, ...objects: Object3D[]): Object3D {
+        journal.restructure();
+        return original.apply(this, objects);
+      });
+    });
   }
 }

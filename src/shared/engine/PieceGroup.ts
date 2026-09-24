@@ -1,4 +1,6 @@
 import { Group } from 'three';
+import { PoseJournal } from './PoseJournal';
+import { PoseTable } from './PoseTable';
 
 /**
  * Raíz de una pieza de la escena que puede pausar el recálculo de matrices de todo su árbol. three.js recorre
@@ -11,14 +13,28 @@ export class PieceGroup extends Group {
   /** Si el recorrido de matrices salta esta pieza. */
   public paused = false;
 
+  private readonly poses = new PoseTable();
+
   /**
-   * @inheritdoc
+   * Recalcula las matrices que cambiaron. Sin forzar, no recorre el árbol: su {@link PoseTable} dice qué
+   * objetos cambiaron y solo se recalculan esos con sus descendientes (el resultado es el mismo que el recorrido
+   * de three.js). Forzado, o si cambió la estructura de la escena, recorre todo y vuelve a armar la tabla.
+   *
+   * @param force Recalcular todas las matrices.
    */
   public override updateMatrixWorld(force?: boolean): void {
     if (this.paused && force !== true) {
       return;
     }
-    super.updateMatrixWorld(force);
+    const structure = PoseJournal.shared.structure;
+    if (force === true || !this.poses.matches(structure)) {
+      super.updateMatrixWorld(force);
+      if (!this.poses.matches(structure)) {
+        this.poses.rebuild(this, structure);
+      }
+      return;
+    }
+    this.refreshChanged();
   }
 
   /**
@@ -29,5 +45,20 @@ export class PieceGroup extends Group {
     this.paused = false;
     this.updateMatrixWorld();
     this.paused = paused;
+  }
+
+  /**
+   * Recalcula las matrices de lo que cambió según la tabla de poses (todo el árbol si cambió la raíz).
+   */
+  private refreshChanged(): void {
+    const changed = this.poses.scan();
+    if (changed.length === 0) {
+      return;
+    }
+    if (changed[0] === 0) {
+      super.updateMatrixWorld();
+      return;
+    }
+    this.poses.apply(changed);
   }
 }

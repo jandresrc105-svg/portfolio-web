@@ -4,6 +4,7 @@ import { ProxyBuilder } from './ProxyBuilder';
 import { ProxyCover } from './ProxyCover';
 import type { ProxyGroup } from './ProxyGroup';
 import { ProxyKey } from './ProxyKey';
+import { ProxyMotion } from './ProxyMotion';
 import { ProxyRig } from './ProxyRig';
 import type { ProxyKind } from './ProxyKind';
 import type { ProxyPart } from './ProxyPart';
@@ -44,6 +45,8 @@ export class SceneProxy implements Updatable {
   private readonly parts = new ProxyParts();
   private readonly cover = new ProxyCover();
   private readonly watch = new ProxyWatch();
+  private readonly motion = new ProxyMotion();
+  private readonly flagged = new Set<Mesh>();
   private readonly moving = new Set<Object3D>();
   private readonly drops = new Map<Mesh, number>();
   private readonly moves = new Map<Mesh, number>();
@@ -60,7 +63,7 @@ export class SceneProxy implements Updatable {
   private active = false;
   private built = false;
   private frame = 0;
-  private quiet = 0;
+  private checks = 0;
   private stride = 1;
   private refreshAt = 0;
 
@@ -85,8 +88,8 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Avisa cuando la zona quedó quieta (con las piezas que pueden dejar de recalcular matrices) y cuando la
-   * versión unida se desactiva o se rearma (con una lista vacía).
+   * Avisa qué piezas de la zona quedaron quietas (las que pueden dejar de recalcular matrices; de nuevo cada
+   * vez que una empieza a moverse) y cuando la versión unida se desactiva o se rearma (con una lista vacía).
    *
    * @param listener Recibe las raíces quietas.
    */
@@ -187,7 +190,7 @@ export class SceneProxy implements Updatable {
       this.refreshAt = 0;
       this.refresh();
     }
-    if (this.quiet < SceneProxy.QUIET_CHECKS && this.frame % SceneProxy.CHECK_EVERY === 0) {
+    if (this.frame % SceneProxy.CHECK_EVERY === 0) {
       this.settle();
     }
   }
@@ -205,33 +208,48 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Saca de los lotes lo que cambió desde que se copió (revisa la parte de las mallas que toca en este frame).
+   * Saca de los lotes lo que cambió desde que se copió: revisa material, textura y visibilidad de la parte de
+   * las mallas que toca en este frame, y la posición de las que cuelgan de algo que se recompuso
+   * ({@link ProxyMotion}).
    */
   private detect(): void {
-    const { sources, stride, changed } = this;
+    const { sources, stride, changed, dropped } = this;
     for (let index = this.frame % stride; index < sources.length; index += stride) {
       const source = sources[index];
-      if (source && !this.dropped.has(source.mesh)) {
-        this.inspect(source);
+      if (source && !dropped.has(source.mesh) && this.replaced(source)) {
+        this.flag(source.mesh, 'changed');
       }
     }
+    this.flagMoved();
     if (changed.length > 0) {
       this.drop(changed);
       changed.length = 0;
+      this.flagged.clear();
     }
   }
 
   /**
-   * Revisa una malla copiada y, si cambió, la anota para sacarla del lote.
-   *
-   * @param source Malla con su estado copiado.
+   * Anota las mallas copiadas que se movieron (según lo que se recompuso) y que no se anotaron ya.
    */
-  private inspect(source: ProxySource): void {
-    const change = this.change(source);
-    if (change !== null) {
-      this.count(source.mesh, change);
-      this.changed.push(source.mesh);
+  private flagMoved(): void {
+    const { dropped, flagged } = this;
+    for (const { mesh } of this.motion.moved(dropped, flagged)) {
+      if (!flagged.has(mesh)) {
+        this.flag(mesh, 'moved');
+      }
     }
+  }
+
+  /**
+   * Anota una malla que cambió para sacarla del lote.
+   *
+   * @param mesh Malla.
+   * @param change Qué cambió.
+   */
+  private flag(mesh: Mesh, change: 'moved' | 'changed'): void {
+    this.count(mesh, change);
+    this.changed.push(mesh);
+    this.flagged.add(mesh);
   }
 
   /**
@@ -258,11 +276,13 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Cuenta revisiones sin movimiento en la zona y, tras varias, avisa qué piezas quedaron quietas.
+   * Revisa qué piezas se movieron: tras unas cuantas revisiones avisa cuáles quedaron quietas (aunque otras
+   * sigan moviéndose) y, desde entonces, vuelve a avisar cada vez que una de ellas empieza a moverse.
    */
   private settle(): void {
-    this.quiet = this.watch.check() ? 0 : this.quiet + 1;
-    if (this.quiet === SceneProxy.QUIET_CHECKS) {
+    const restless = this.watch.check();
+    this.checks += 1;
+    if (this.checks === SceneProxy.QUIET_CHECKS || (this.checks > SceneProxy.QUIET_CHECKS && restless)) {
       this.notify(this.watch.still(this.roots));
     }
   }
@@ -271,7 +291,7 @@ export class SceneProxy implements Updatable {
    * Vuelve a vigilar la zona desde cero (después de activarla o rearmarla).
    */
   private restartWatch(): void {
-    this.quiet = 0;
+    this.checks = 0;
     this.watch.start(this.roots);
     this.notify([]);
   }
@@ -365,6 +385,7 @@ export class SceneProxy implements Updatable {
         batch.drop(mesh);
       });
     });
+    this.motion.watch(this.sources);
     this.group.clear();
     this.batches.forEach((batch) => this.group.add(batch.mesh));
     this.cover.compute(this.roots, this.proxied());

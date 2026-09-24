@@ -1,32 +1,43 @@
 import { Box3, Sphere, type Object3D } from 'three';
 import type { DetailAware } from './DetailAware';
 import type { PieceGroup } from './PieceGroup';
+import { PoseJournal } from './PoseJournal';
 import type { Updatable } from './Updatable';
 
 /**
  * Pieza animada que el {@link UpdateScheduler} actualiza a pedido: a ritmo completo, a ritmo reducido o
  * congelada en su último cuadro. Guarda el tiempo que dejó de recibir para no dar saltos al volver y apaga el
- * recálculo de matrices de su árbol mientras no se actualiza en cada frame.
+ * recálculo de matrices de su árbol mientras no se actualiza en cada frame. Con las matrices congeladas (pieza
+ * quieta) igual las recalcula de vez en cuando: si algo se recompuso ({@link PoseJournal}), la pieza empezó a
+ * moverse y deja de estar congelada.
  */
 export class ScheduledPiece {
   private static readonly MAX_DELTA = 0.05;
+  private static readonly PROBE = { every: 0.25, slots: 8 };
 
   private readonly box = new Box3();
   private sphere: Sphere | null = null;
   private pending = 0;
   private detailed: boolean | null = null;
   private held = false;
+  private sinceProbe: number;
 
   /**
    * Prepara la pieza.
    *
    * @param updatable Lógica que se actualiza.
    * @param root Raíz 3D de la pieza.
+   * @param order Posición de la pieza en el planificador: reparte en distintos frames los recálculos de
+   * prueba de las piezas congeladas, para que no caigan todos juntos.
    */
   public constructor(
     private readonly updatable: Updatable,
     private readonly root: PieceGroup,
-  ) {}
+    order: number,
+  ) {
+    const { every, slots } = ScheduledPiece.PROBE;
+    this.sinceProbe = ((order % slots) / slots) * every;
+  }
 
   /**
    * Esfera que envuelve la pieza en el mundo (se calcula una vez, la primera vez que se pide). Una pieza sin
@@ -88,6 +99,9 @@ export class ScheduledPiece {
     this.root.paused = this.held;
     this.updatable.update(Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
+    if (this.held) {
+      this.probe(delta);
+    }
   }
 
   /**
@@ -103,9 +117,12 @@ export class ScheduledPiece {
     if (this.pending < step) {
       return;
     }
-    this.updatable.update(Math.min(this.pending, ScheduledPiece.MAX_DELTA), elapsed);
+    const waited = this.pending;
+    this.updatable.update(Math.min(waited, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
-    if (!this.held) {
+    if (this.held) {
+      this.probe(waited);
+    } else {
       this.root.refreshMatrices();
     }
   }
@@ -118,5 +135,25 @@ export class ScheduledPiece {
   public hold(delta: number): void {
     this.root.paused = true;
     this.pending = Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA);
+  }
+
+  /**
+   * Con las matrices congeladas, las recalcula cada tanto; si algo se recompuso, la pieza se movió y deja de
+   * estar congelada (vuelve a recalcular sus matrices en cada actualización).
+   *
+   * @param delta Segundos desde la actualización anterior.
+   */
+  private probe(delta: number): void {
+    this.sinceProbe += delta;
+    if (this.sinceProbe < ScheduledPiece.PROBE.every) {
+      return;
+    }
+    this.sinceProbe = 0;
+    const journal = PoseJournal.shared;
+    const before = journal.recorded;
+    this.root.refreshMatrices();
+    if (journal.recorded !== before) {
+      this.held = false;
+    }
   }
 }

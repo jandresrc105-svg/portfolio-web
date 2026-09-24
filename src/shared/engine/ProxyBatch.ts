@@ -125,10 +125,10 @@ export class ProxyBatch {
    * @param force Reescribir aunque no haya cambios.
    */
   private refresh(entry: ProxyEntry, force: boolean): void {
-    this.read(entry.material);
-    if (!force && ProxyBatch.same(this.current, entry.last)) {
+    if (!force && !this.differs(entry.material, entry.last)) {
       return;
     }
+    this.read(entry.material);
     entry.last.set(this.current);
     for (const range of entry.ranges) {
       this.write(range.start, range.count);
@@ -232,6 +232,23 @@ export class ProxyBatch {
     for (let index = 0; index < uv.count; index += 1) {
       uv.setXY(index, rect.u + uv.getX(index) * rect.width, rect.v + uv.getY(index) * rect.height);
     }
+  }
+
+  /**
+   * Si los valores actuales de un material original ya no son los copiados (comparados con la misma precisión
+   * con que se guardan), sin escribir nada: es lo que corre para cada material en cada frame.
+   *
+   * @param material Material original (estándar si el lote es iluminado, básico si no).
+   * @param last Valores copiados.
+   * @returns `true` si cambió alguno.
+   */
+  private differs(material: Material, last: Float32Array): boolean {
+    const { color } = material as MeshBasicMaterial;
+    const { fround } = Math;
+    if (fround(color.r) !== last[0] || fround(color.g) !== last[1] || fround(color.b) !== last[2]) {
+      return true;
+    }
+    return this.kind === 'lit' && ProxyBatch.surfaceDiffers(material as MeshStandardMaterial, last);
   }
 
   /**
@@ -390,18 +407,22 @@ export class ProxyBatch {
   }
 
   /**
-   * Si dos listas de valores son iguales.
+   * Si el brillo propio, la rugosidad o el metal de un material estándar ya no son los copiados.
    *
-   * @param current Valores actuales.
+   * @param material Material estándar original.
    * @param last Valores copiados.
-   * @returns `true` si no cambió ninguno.
+   * @returns `true` si cambió alguno.
    */
-  private static same(current: Float32Array, last: Float32Array): boolean {
-    for (let index = 0; index < current.length; index += 1) {
-      if (current[index] !== last[index]) {
-        return false;
-      }
-    }
-    return true;
+  private static surfaceDiffers(material: MeshStandardMaterial, last: Float32Array): boolean {
+    const { emissive: glowAt, surface } = ProxyBatch.LAYOUT;
+    const { emissive, emissiveIntensity: glow } = material;
+    const { fround } = Math;
+    return (
+      fround(emissive.r * glow) !== last[glowAt] ||
+      fround(emissive.g * glow) !== last[glowAt + 1] ||
+      fround(emissive.b * glow) !== last[glowAt + 2] ||
+      fround(material.roughness) !== last[surface] ||
+      fround(material.metalness) !== last[surface + 1]
+    );
   }
 }

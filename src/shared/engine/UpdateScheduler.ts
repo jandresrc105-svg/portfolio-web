@@ -36,7 +36,7 @@ export class UpdateScheduler implements Updatable {
    * @param root Raíz 3D de la pieza (ya en la escena).
    */
   public track(updatable: Updatable, root: PieceGroup): void {
-    this.pieces.push(new ScheduledPiece(updatable, root));
+    this.pieces.push(new ScheduledPiece(updatable, root, this.pieces.length));
   }
 
   /**
