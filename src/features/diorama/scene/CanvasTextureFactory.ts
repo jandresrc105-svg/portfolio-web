@@ -38,6 +38,18 @@ export class CanvasTextureFactory {
   ) {}
 
   /**
+   * Canvas auxiliar sin textura (capas que una pantalla dibuja una vez y copia, o historiales), con el
+   * estado de dibujo por omisión.
+   *
+   * @param width Ancho en píxeles.
+   * @param height Alto en píxeles.
+   * @returns Contexto 2D del canvas nuevo.
+   */
+  public static surface(width: number, height: number): CanvasRenderingContext2D {
+    return CanvasTextureFactory.context(width, height);
+  }
+
+  /**
    * Crea una textura a partir de una función de dibujo. Las medidas son lógicas: el canvas real
    * es `supersample` veces más grande y se escala solo, así el código de dibujo no cambia.
    *

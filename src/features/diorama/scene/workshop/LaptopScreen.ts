@@ -10,7 +10,9 @@ import { FirmwareControl } from './firmware/FirmwareControl';
  * Pantalla de la laptop, dibujada en canvas: un IDE oscuro con barra de título, botón "Subir" y barra de
  * progreso, lista de programas a la izquierda, editor con el código resaltado (se desplaza solo si no cabe),
  * consola con la salida de la compilación y el monitor serie, y barra de estado con la lectura del
- * potenciómetro. Solo se redibuja cuando algo cambió y a lo sumo unas veces por segundo.
+ * potenciómetro. Solo se redibuja cuando algo cambió y a lo sumo unas veces por segundo, y de a zonas: cada
+ * franja (título, herramientas, lista, editor, consola y estado) se repinta, recortada a su rectángulo, solo
+ * si cambió lo que muestra (así el editor, que es lo más caro, no se repinta con cada línea del monitor).
  */
 export class LaptopScreen {
   public static readonly CANVAS = { width: 512, height: 384 };
@@ -32,6 +34,39 @@ export class LaptopScreen {
   private static readonly WEIGHT = { regular: 400, bold: 700 };
   private static readonly SCROLL = { hold: 3.5, step: 0.45 };
   private static readonly MARGIN = 6;
+  private static readonly REGIONS = {
+    title: { x: 0, y: 0, width: LaptopScreen.CANVAS.width, height: LaptopScreen.TITLE.height },
+    toolbar: {
+      x: 0,
+      y: LaptopScreen.TOOLBAR.top,
+      width: LaptopScreen.CANVAS.width,
+      height: LaptopScreen.TOOLBAR.height,
+    },
+    sidebar: {
+      x: 0,
+      y: LaptopScreen.EDITOR.top,
+      width: LaptopScreen.SIDEBAR.width,
+      height: LaptopScreen.CONSOLE.top - LaptopScreen.EDITOR.top,
+    },
+    editor: {
+      x: LaptopScreen.SIDEBAR.width,
+      y: LaptopScreen.EDITOR.top,
+      width: LaptopScreen.CANVAS.width - LaptopScreen.SIDEBAR.width,
+      height: LaptopScreen.EDITOR.bottom - LaptopScreen.EDITOR.top,
+    },
+    console: {
+      x: 0,
+      y: LaptopScreen.CONSOLE.top,
+      width: LaptopScreen.CANVAS.width,
+      height: LaptopScreen.CONSOLE.bottom - LaptopScreen.CONSOLE.top,
+    },
+    status: {
+      x: 0,
+      y: LaptopScreen.STATUS.top,
+      width: LaptopScreen.CANVAS.width,
+      height: LaptopScreen.STATUS.height,
+    },
+  };
   private static readonly DOTS = [{ color: '#ff5f57' }, { color: '#febc2e' }, { color: '#28c840' }];
   private static readonly DOT = { radius: 3.5, spacing: 11 };
   private static readonly COLORS = {
@@ -64,6 +99,7 @@ export class LaptopScreen {
   private context: CanvasRenderingContext2D | null = null;
   private texture: CanvasTexture | null = null;
   private shown = '';
+  private readonly painted = new Map<keyof typeof LaptopScreen.REGIONS, string>();
   private opened = { program: -1, at: 0 };
 
   /**
@@ -168,12 +204,69 @@ export class LaptopScreen {
     hover: string | null,
     scroll: number,
   ): void {
-    this.paintTitle(context, state);
-    this.paintToolbar(context, state, hover);
-    this.paintSidebar(context, state, hover);
-    this.paintEditor(context, state, scroll);
-    this.paintConsole(context, state);
-    this.paintStatus(context, state);
+    const keys = LaptopScreen.keys(state, hover, scroll);
+    this.region(context, 'title', keys.title, () => {
+      this.paintTitle(context, state);
+    });
+    this.region(context, 'toolbar', keys.toolbar, () => {
+      this.paintToolbar(context, state, hover);
+    });
+    this.region(context, 'sidebar', keys.sidebar, () => {
+      this.paintSidebar(context, state, hover);
+    });
+    this.paintLower(context, state, keys, scroll);
+  }
+
+  /**
+   * Zonas de abajo: editor, consola y barra de estado.
+   *
+   * @param context Contexto 2D.
+   * @param state Estado del laboratorio.
+   * @param keys Clave de cada zona.
+   * @param scroll Primera línea visible del editor.
+   */
+  private paintLower(
+    context: CanvasRenderingContext2D,
+    state: FirmwareState,
+    keys: Record<keyof typeof LaptopScreen.REGIONS, string>,
+    scroll: number,
+  ): void {
+    this.region(context, 'editor', keys.editor, () => {
+      this.paintEditor(context, state, scroll);
+    });
+    this.region(context, 'console', keys.console, () => {
+      this.paintConsole(context, state);
+    });
+    this.region(context, 'status', keys.status, () => {
+      this.paintStatus(context, state);
+    });
+  }
+
+  /**
+   * Repinta una zona, recortada a su rectángulo, si cambió lo que muestra.
+   *
+   * @param context Contexto 2D.
+   * @param id Zona.
+   * @param key Resumen de lo que muestra ahora.
+   * @param paint Pinta la zona.
+   */
+  private region(
+    context: CanvasRenderingContext2D,
+    id: keyof typeof LaptopScreen.REGIONS,
+    key: string,
+    paint: () => void,
+  ): void {
+    if (this.painted.get(id) === key) {
+      return;
+    }
+    this.painted.set(id, key);
+    const { x, y, width, height } = LaptopScreen.REGIONS[id];
+    context.save();
+    context.beginPath();
+    context.rect(x, y, width, height);
+    context.clip();
+    paint();
+    context.restore();
   }
 
   /**
@@ -492,6 +585,32 @@ export class LaptopScreen {
     context.textAlign = style.align ?? 'left';
     context.fillStyle = style.color ?? COLORS.text;
     context.fillText(text, at.x, at.y);
+  }
+
+  /**
+   * Resumen de lo que muestra cada zona (si no cambió, la zona no se repinta).
+   *
+   * @param state Estado del laboratorio.
+   * @param hover Control señalado.
+   * @param scroll Primera línea visible del editor.
+   * @returns Clave de cada zona.
+   */
+  private static keys(
+    state: FirmwareState,
+    hover: string | null,
+    scroll: number,
+  ): Record<keyof typeof LaptopScreen.REGIONS, string> {
+    const file = state.programs[state.selected]?.file ?? '';
+    const building = String(state.phase !== FirmwarePhase.Running);
+    const log = state.log.map((entry) => `${entry.kind}:${entry.text}`).join('\n');
+    return {
+      title: file,
+      toolbar: `${building}|${state.label}|${String(state.progress)}|${hover ?? ''}`,
+      sidebar: `${String(state.selected)}|${String(state.running)}|${hover ?? ''}`,
+      editor: `${String(state.selected)}|${file}|${String(scroll)}`,
+      console: `${building}|${log}`,
+      status: `${building}|${state.label}|${String(state.pot)}|${String(state.delay)}`,
+    };
   }
 
   /**

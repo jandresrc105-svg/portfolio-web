@@ -1,13 +1,17 @@
 import type { CanvasTexture } from 'three';
 import { RadioMode } from '../../models/RadioMode';
 import type { RadioState } from '../../models/RadioState';
+import type { WaterfallColor } from '../../models/WaterfallColor';
 import { CanvasTextureFactory } from '../CanvasTextureFactory';
+import { WaterfallHistory } from './WaterfallHistory';
 
 /**
  * Pantalla del SDR dibujada en canvas: arriba la frecuencia, el modo y la relación señal/ruido; luego el
  * espectro de toda la banda (FFT) con la banda de paso del filtro y la marca de sintonía; debajo la
  * cascada (waterfall), que baja una fila por cuadro y deja ver las portadoras en el tiempo (las balizas CW
  * se ven como trazos punteados: el morse); y abajo el texto que decodifica el receptor, letra por letra.
+ * Cada cuadro redibuja solo el espectro y la cascada; la cabecera, la escala y el pie se repintan cuando
+ * cambia lo que muestran.
  */
 export class RadioWaterfall {
   public static readonly BINS = 128;
@@ -54,10 +58,12 @@ export class RadioWaterfall {
   };
   private static readonly KHZ_PER_MHZ = 1000;
   private static readonly QUARTER_WAVE = 10.6;
+  private static readonly HEX = { radix: 16, red: 16, green: 8, mask: 0xff };
 
-  private readonly palette: string[] = [];
+  private readonly history: WaterfallHistory;
   private context: CanvasRenderingContext2D | null = null;
   private texture: CanvasTexture | null = null;
+  private shown = { header: '', axis: Number.NaN, footer: '' };
 
   /**
    * Crea la pantalla.
@@ -72,9 +78,14 @@ export class RadioWaterfall {
     private readonly band: { from: number; to: number },
   ) {
     const { steps } = RadioWaterfall.PALETTE;
-    for (let index = 0; index < steps; index++) {
-      this.palette.push(RadioWaterfall.shade(index / (steps - 1)));
-    }
+    const palette = Array.from({ length: steps }, (_value, index) =>
+      RadioWaterfall.shade(index / (steps - 1)),
+    );
+    this.history = new WaterfallHistory(
+      { bins: RadioWaterfall.BINS, rows: RadioWaterfall.WATERFALL.height },
+      palette,
+      { fallback: RadioWaterfall.rgb(RadioWaterfall.COLORS.background), blank: RadioWaterfall.COLORS.off },
+    );
   }
 
   /**
@@ -126,6 +137,8 @@ export class RadioWaterfall {
         top: 0,
         height: RadioWaterfall.CANVAS.height,
       });
+      this.history.clear();
+      this.shown = { header: '', axis: Number.NaN, footer: '' };
       this.commit();
     }
   }
@@ -140,20 +153,35 @@ export class RadioWaterfall {
     const { width } = RadioWaterfall.CANVAS;
     const { height, y } = RadioWaterfall.HEADER;
     const { COLORS, MARGIN, STYLES } = RadioWaterfall;
-    RadioWaterfall.fill(context, COLORS.header, { top: 0, height });
     const megahertz = (state.frequency / RadioWaterfall.KHZ_PER_MHZ).toFixed(3);
-    RadioWaterfall.text(context, `${megahertz} MHz  ${state.mode}`, { x: MARGIN, y }, STYLES.title);
+    const title = `${megahertz} MHz  ${state.mode}`;
     const snr = state.station ? `SNR ${state.snr.toFixed(0)} dB` : 'SNR —';
-    RadioWaterfall.text(context, snr, { x: width - MARGIN, y, align: 'right' }, STYLES.tag);
     const tag = RadioWaterfall.tag(state);
-    if (tag) {
-      RadioWaterfall.text(
-        context,
-        tag.text,
-        { x: width / 2 + MARGIN * 2, y },
-        { ...STYLES.tag, color: tag.color },
-      );
+    if (!this.changed('header', `${title}|${snr}|${tag?.text ?? ''}`)) {
+      return;
     }
+    RadioWaterfall.fill(context, COLORS.header, { top: 0, height });
+    RadioWaterfall.text(context, title, { x: MARGIN, y }, STYLES.title);
+    RadioWaterfall.text(context, snr, { x: width - MARGIN, y, align: 'right' }, STYLES.tag);
+    if (tag) {
+      const style = { ...STYLES.tag, color: tag.color };
+      RadioWaterfall.text(context, tag.text, { x: width / 2 + MARGIN * 2, y }, style);
+    }
+  }
+
+  /**
+   * Anota lo que muestra una franja de texto.
+   *
+   * @param part Franja.
+   * @param key Resumen de lo que muestra ahora.
+   * @returns Si cambió desde la última vez (y hay que repintarla).
+   */
+  private changed(part: 'header' | 'footer', key: string): boolean {
+    if (this.shown[part] === key) {
+      return false;
+    }
+    this.shown[part] = key;
+    return true;
   }
 
   /**
@@ -208,9 +236,9 @@ export class RadioWaterfall {
     const step = width / Math.max(spectrum.length - 1, 1);
     context.beginPath();
     context.moveTo(0, bottom);
-    spectrum.forEach((value, index) => {
-      context.lineTo(index * step, bottom - value * height);
-    });
+    for (let index = 0; index < spectrum.length; index += 1) {
+      context.lineTo(index * step, bottom - (spectrum[index] ?? 0) * height);
+    }
     context.lineTo(width, bottom);
     context.closePath();
   }
@@ -224,12 +252,16 @@ export class RadioWaterfall {
   private drawAxis(context: CanvasRenderingContext2D, state: RadioState): void {
     const { top, height, y, step, marker } = RadioWaterfall.AXIS;
     const { COLORS, STYLES, KHZ_PER_MHZ } = RadioWaterfall;
+    const x = this.x(state.frequency);
+    if (x === this.shown.axis) {
+      return;
+    }
+    this.shown.axis = x;
     RadioWaterfall.fill(context, COLORS.background, { top, height });
     for (let khz = this.band.from; khz <= this.band.to; khz += step) {
       const at = { x: this.x(khz), y, align: RadioWaterfall.align(khz, this.band) };
       RadioWaterfall.text(context, (khz / KHZ_PER_MHZ).toFixed(1), at, STYLES.axis);
     }
-    const x = this.x(state.frequency);
     context.fillStyle = COLORS.marker;
     context.beginPath();
     context.moveTo(x - marker, top + height);
@@ -245,15 +277,8 @@ export class RadioWaterfall {
    * @param spectrum Espectro.
    */
   private drawWaterfall(context: CanvasRenderingContext2D, spectrum: Float32Array): void {
-    const { width } = RadioWaterfall.CANVAS;
-    const { top, height } = RadioWaterfall.WATERFALL;
-    context.drawImage(context.canvas, 0, top, width, height - 1, 0, top + 1, width, height - 1);
-    const cell = width / spectrum.length;
-    const last = this.palette.length - 1;
-    spectrum.forEach((value, index) => {
-      context.fillStyle = this.palette[Math.round(value * last)] ?? RadioWaterfall.COLORS.background;
-      context.fillRect(Math.floor(index * cell), top, Math.ceil(cell), 1);
-    });
+    this.history.push(spectrum);
+    this.history.drawTo(context, { top: RadioWaterfall.WATERFALL.top, width: RadioWaterfall.CANVAS.width });
   }
 
   /**
@@ -267,15 +292,19 @@ export class RadioWaterfall {
     const { height } = RadioWaterfall.CANVAS;
     const { top, first, second } = RadioWaterfall.FOOTER;
     const { COLORS, STYLES, MARGIN } = RadioWaterfall;
-    RadioWaterfall.fill(context, COLORS.header, { top, height: height - top });
     const headline = RadioWaterfall.headline(state, blink);
+    const detail = RadioWaterfall.detail(state);
+    if (!this.changed('footer', `${headline.text}|${headline.color}|${detail}`)) {
+      return;
+    }
+    RadioWaterfall.fill(context, COLORS.header, { top, height: height - top });
     RadioWaterfall.text(
       context,
       headline.text,
       { x: MARGIN, y: first },
       { ...STYLES.headline, color: headline.color },
     );
-    RadioWaterfall.text(context, RadioWaterfall.detail(state), { x: MARGIN, y: second }, STYLES.detail);
+    RadioWaterfall.text(context, detail, { x: MARGIN, y: second }, STYLES.detail);
   }
 
   /**
@@ -415,15 +444,27 @@ export class RadioWaterfall {
    * Color de la paleta de la cascada para un nivel.
    *
    * @param value Nivel (0 a 1).
-   * @returns Color CSS.
+   * @returns Canales del color.
    */
-  private static shade(value: number): string {
+  private static shade(value: number): WaterfallColor {
     const stops = RadioWaterfall.PALETTE.stops;
     const upper = stops.findIndex((stop) => stop.at >= value);
     const high = stops[Math.max(upper, 0)] ?? { at: 1, r: 0, g: 0, b: 0 };
     const low = stops[Math.max(upper - 1, 0)] ?? high;
     const mix = high.at > low.at ? (value - low.at) / (high.at - low.at) : 0;
     const channel = (from: number, to: number): number => Math.round(from + (to - from) * mix);
-    return `rgb(${String(channel(low.r, high.r))}, ${String(channel(low.g, high.g))}, ${String(channel(low.b, high.b))})`;
+    return { r: channel(low.r, high.r), g: channel(low.g, high.g), b: channel(low.b, high.b) };
+  }
+
+  /**
+   * Canales de un color CSS hexadecimal (`#rrggbb`).
+   *
+   * @param hex Color.
+   * @returns Canales del color.
+   */
+  private static rgb(hex: string): WaterfallColor {
+    const { HEX } = RadioWaterfall;
+    const value = Number.parseInt(hex.slice(1), HEX.radix);
+    return { r: (value >> HEX.red) & HEX.mask, g: (value >> HEX.green) & HEX.mask, b: value & HEX.mask };
   }
 }

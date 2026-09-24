@@ -9,7 +9,9 @@ import { CanvasTextureFactory } from '../CanvasTextureFactory';
  * barras de estado (RUN/STOP, base de tiempo, generador, escalas, ganancias y mediciones). Sigue el estado
  * del equipo: escalas, posición, canales visibles y mediciones. Dispara en el flanco de subida de la
  * referencia, así la traza queda quieta; un poco de ruido de medición la mantiene viva. También dibuja la
- * pantalla de arranque y la pantalla apagada.
+ * pantalla de arranque y la pantalla apagada. La retícula se dibuja una vez en un canvas aparte y se copia; las
+ * barras de estado se repintan solo cuando cambia su texto, y cada traza se calcula una vez y se traza dos
+ * veces (halo y línea) recortada al área de trazado.
  */
 export class OscilloscopeDisplay {
   private static readonly CANVAS = { width: 512, height: 320, samples: 256 };
@@ -77,8 +79,12 @@ export class OscilloscopeDisplay {
   private static readonly MILLI = 1000;
 
   private readonly jitter = new Float32Array(OscilloscopeDisplay.CANVAS.samples);
+  private readonly trace = new Float32Array(OscilloscopeDisplay.CANVAS.samples);
+  private readonly area = OscilloscopeDisplay.plotArea();
   private context: CanvasRenderingContext2D | null = null;
+  private plate: CanvasRenderingContext2D | null = null;
   private texture: CanvasTexture | null = null;
+  private shown = { top: '', bottom: '', blank: false };
 
   /**
    * Crea la pantalla.
@@ -110,6 +116,9 @@ export class OscilloscopeDisplay {
       },
       1,
     );
+    this.plate = CanvasTextureFactory.surface(width, height);
+    OscilloscopeDisplay.clear(this.plate, OscilloscopeDisplay.COLORS.background);
+    this.drawGrid(this.plate);
     return this.texture;
   }
 
@@ -125,13 +134,12 @@ export class OscilloscopeDisplay {
       return;
     }
     if (acquire) {
-      this.jitter.forEach((_value, index) => {
+      for (let index = 0; index < this.jitter.length; index += 1) {
         this.jitter[index] = (Math.random() - 1 / 2) * OscilloscopeDisplay.NOISE;
-      });
+      }
     }
-    OscilloscopeDisplay.clear(context, OscilloscopeDisplay.COLORS.background);
-    this.drawGrid(context);
-    this.drawChannels(context);
+    this.shown.blank = false;
+    this.drawPlot(context);
     this.drawTopBar(context, blink);
     this.drawBottomBar(context);
     this.commit();
@@ -150,6 +158,7 @@ export class OscilloscopeDisplay {
     const { width } = OscilloscopeDisplay.CANVAS;
     const { y, subtitle } = OscilloscopeDisplay.BOOT;
     const { STYLES, TEXT, COLORS, FONT } = OscilloscopeDisplay;
+    this.shown = { top: '', bottom: '', blank: false };
     OscilloscopeDisplay.clear(context, COLORS.background);
     OscilloscopeDisplay.text(context, TEXT.bootTitle, { x: width / 2, y }, STYLES.boot, FONT.title);
     OscilloscopeDisplay.text(context, TEXT.bootSubtitle, { x: width / 2, y: subtitle }, STYLES.bootDim);
@@ -161,10 +170,30 @@ export class OscilloscopeDisplay {
    * Pantalla apagada.
    */
   public drawOff(): void {
-    if (this.context) {
+    if (this.context && !this.shown.blank) {
+      this.shown = { top: '', bottom: '', blank: true };
       OscilloscopeDisplay.clear(this.context, OscilloscopeDisplay.COLORS.off);
       this.commit();
     }
+  }
+
+  /**
+   * Área de trazado: copia la retícula y dibuja los canales sin salirse de ella (las barras quedan intactas).
+   *
+   * @param context Contexto 2D.
+   */
+  private drawPlot(context: CanvasRenderingContext2D): void {
+    const { width } = OscilloscopeDisplay.CANVAS;
+    const { top, plotHeight } = this.area;
+    if (this.plate) {
+      context.drawImage(this.plate.canvas, 0, top, width, plotHeight, 0, top, width, plotHeight);
+    }
+    context.save();
+    context.beginPath();
+    context.rect(0, top, width, plotHeight);
+    context.clip();
+    this.drawChannels(context);
+    context.restore();
   }
 
   /**
@@ -175,7 +204,7 @@ export class OscilloscopeDisplay {
   private drawGrid(context: CanvasRenderingContext2D): void {
     const { width } = OscilloscopeDisplay.CANVAS;
     const { columns, rows } = this.scope.divisions;
-    const { top, plotHeight } = OscilloscopeDisplay.plotArea();
+    const { top, plotHeight } = this.area;
     context.lineWidth = 1;
     context.strokeStyle = OscilloscopeDisplay.COLORS.grid;
     context.setLineDash(OscilloscopeDisplay.DASH.map((part) => ('on' in part ? part.on : part.off)));
@@ -201,7 +230,7 @@ export class OscilloscopeDisplay {
   private drawAxes(context: CanvasRenderingContext2D): void {
     const { width } = OscilloscopeDisplay.CANVAS;
     const { ticks, tick } = OscilloscopeDisplay.GRID;
-    const { top, plotHeight } = OscilloscopeDisplay.plotArea();
+    const { top, plotHeight } = this.area;
     const middle = top + plotHeight / 2;
     context.strokeStyle = OscilloscopeDisplay.COLORS.axis;
     context.beginPath();
@@ -218,26 +247,23 @@ export class OscilloscopeDisplay {
   }
 
   /**
-   * Canales visibles, cada uno con su marcador de tierra, halo y trazo fino.
+   * Canales visibles (CH2 primero), cada uno con su marcador de tierra, halo y trazo fino sobre la misma
+   * traza.
    *
    * @param context Contexto 2D.
    */
   private drawChannels(context: CanvasRenderingContext2D): void {
-    const signals = [
-      (time: number, index: number): number => this.loop.output(time) + (this.jitter[index] ?? 0),
-      (time: number): number => this.loop.setpoint(time),
-    ];
     const { channels } = this.scope.state;
-    [1, 0].forEach((channel) => {
+    for (let channel = OscilloscopeDisplay.CHANNELS.length - 1; channel >= 0; channel -= 1) {
       const style = OscilloscopeDisplay.CHANNELS[channel];
-      const signal = signals[channel];
-      if (channels[channel] !== true || !style || !signal) {
-        return;
+      if (channels[channel] === true && style) {
+        this.drawMarker(context, style.color);
+        this.sample(channel);
+        this.tracePath(context);
+        OscilloscopeDisplay.strokePath(context, style.halo, style.width * style.glow);
+        OscilloscopeDisplay.strokePath(context, style.color, style.width);
       }
-      this.drawMarker(context, style.color);
-      this.drawTrace(context, signal, style.halo, style.width * style.glow);
-      this.drawTrace(context, signal, style.color, style.width);
-    });
+    }
   }
 
   /**
@@ -248,7 +274,7 @@ export class OscilloscopeDisplay {
    */
   private drawMarker(context: CanvasRenderingContext2D, color: string): void {
     const { width, height } = OscilloscopeDisplay.MARKER;
-    const y = this.plotY(0);
+    const y = this.plotY(0, this.area);
     context.fillStyle = color;
     context.beginPath();
     context.moveTo(0, y - height / 2);
@@ -258,30 +284,35 @@ export class OscilloscopeDisplay {
   }
 
   /**
-   * Dibuja una señal en la ventana de tiempo actual, empezando un poco antes del disparo.
+   * Muestrea un canal en la ventana de tiempo actual, empezando un poco antes del disparo, y guarda la altura
+   * en pantalla de cada muestra.
    *
-   * @param context Contexto 2D.
-   * @param at Valor de la señal en un instante (recibe también el número de muestra).
-   * @param color Color del trazo.
-   * @param lineWidth Grosor.
+   * @param channel Canal (0: salida del lazo con ruido de medición; 1: referencia).
    */
-  private drawTrace(
-    context: CanvasRenderingContext2D,
-    at: (time: number, index: number) => number,
-    color: string,
-    lineWidth: number,
-  ): void {
-    const { width, samples } = OscilloscopeDisplay.CANVAS;
+  private sample(channel: number): void {
+    const { samples } = OscilloscopeDisplay.CANVAS;
     const window = this.scope.timePerDivision * this.scope.divisions.columns;
     const start = -window * OscilloscopeDisplay.PRE_TRIGGER;
-    context.strokeStyle = color;
-    context.lineWidth = lineWidth;
+    const area = this.area;
+    for (let index = 0; index < samples; index += 1) {
+      const time = start + (index / (samples - 1)) * window;
+      const value =
+        channel === 0 ? this.loop.output(time) + (this.jitter[index] ?? 0) : this.loop.setpoint(time);
+      this.trace[index] = this.plotY(value, area);
+    }
+  }
+
+  /**
+   * Arma el trazo de las muestras guardadas.
+   *
+   * @param context Contexto 2D.
+   */
+  private tracePath(context: CanvasRenderingContext2D): void {
+    const { width, samples } = OscilloscopeDisplay.CANVAS;
     context.beginPath();
     for (let index = 0; index < samples; index += 1) {
-      const value = at(start + (index / (samples - 1)) * window, index);
-      context.lineTo((index / (samples - 1)) * width, this.plotY(value));
+      context.lineTo((index / (samples - 1)) * width, this.trace[index] ?? 0);
     }
-    context.stroke();
   }
 
   /**
@@ -295,19 +326,34 @@ export class OscilloscopeDisplay {
     const middle = OscilloscopeDisplay.BARS.top / 2;
     const { margin } = OscilloscopeDisplay.FONT;
     const { TEXT, STYLES, CHANNELS, COLUMNS } = OscilloscopeDisplay;
-    OscilloscopeDisplay.bar(context, 0, OscilloscopeDisplay.BARS.top);
-    this.drawStatus(context, middle);
+    const status = this.status();
     const timebase = `H ${OscilloscopeDisplay.units(this.scope.timePerDivision, 's')}`;
-    OscilloscopeDisplay.text(context, timebase, { x: width * COLUMNS.timebase, y: middle }, STYLES.left);
-    const generator = { x: width * COLUMNS.generator, y: middle };
-    OscilloscopeDisplay.text(context, this.generatorText(), generator, STYLES.left);
+    const generator = this.generatorText();
     const color = blink ? (CHANNELS[1]?.color ?? STYLES.trigger.color) : STYLES.trigger.color;
-    OscilloscopeDisplay.text(
-      context,
-      TEXT.trigger,
-      { x: width - margin, y: middle },
-      { ...STYLES.trigger, color },
-    );
+    if (!this.changed('top', `${status.text}|${timebase}|${generator}|${color}`)) {
+      return;
+    }
+    OscilloscopeDisplay.bar(context, 0, OscilloscopeDisplay.BARS.top);
+    this.drawStatus(context, middle, status);
+    OscilloscopeDisplay.text(context, timebase, { x: width * COLUMNS.timebase, y: middle }, STYLES.left);
+    OscilloscopeDisplay.text(context, generator, { x: width * COLUMNS.generator, y: middle }, STYLES.left);
+    const trigger = { ...STYLES.trigger, color };
+    OscilloscopeDisplay.text(context, TEXT.trigger, { x: width - margin, y: middle }, trigger);
+  }
+
+  /**
+   * Anota lo que muestra una barra de estado.
+   *
+   * @param bar Barra.
+   * @param key Resumen de lo que muestra ahora.
+   * @returns Si cambió desde la última vez (y hay que repintarla).
+   */
+  private changed(bar: 'top' | 'bottom', key: string): boolean {
+    if (this.shown[bar] === key) {
+      return false;
+    }
+    this.shown[bar] = key;
+    return true;
   }
 
   /**
@@ -315,12 +361,18 @@ export class OscilloscopeDisplay {
    *
    * @param context Contexto 2D.
    * @param middle Línea media de la barra.
+   * @param status Texto y color de la etiqueta.
+   * @param status.text Texto.
+   * @param status.color Color.
    */
-  private drawStatus(context: CanvasRenderingContext2D, middle: number): void {
+  private drawStatus(
+    context: CanvasRenderingContext2D,
+    middle: number,
+    status: { text: string; color: string },
+  ): void {
     const { margin } = OscilloscopeDisplay.FONT;
     const { TEXT, STYLES } = OscilloscopeDisplay;
     OscilloscopeDisplay.text(context, TEXT.brand, { x: margin, y: middle }, STYLES.brand);
-    const status = this.status();
     const x = margin + OscilloscopeDisplay.measure(context, `${TEXT.brand}  `);
     OscilloscopeDisplay.badge(context, status.text, x, middle, status.color);
   }
@@ -335,17 +387,19 @@ export class OscilloscopeDisplay {
     const { bottom } = OscilloscopeDisplay.BARS;
     const { margin } = OscilloscopeDisplay.FONT;
     const { ROWS, STYLES } = OscilloscopeDisplay;
+    const scale = OscilloscopeDisplay.units(this.scope.voltsPerDivision, 'V');
+    const gains = this.gainsText();
+    const readout = this.scope.state.measurements ? this.readout() : OscilloscopeDisplay.TEXT.hidden;
+    const [one, two] = this.scope.state.channels;
+    if (!this.changed('bottom', `${scale}|${String(one)}|${String(two)}|${gains}|${readout}`)) {
+      return;
+    }
     const first = height - bottom * ROWS.first;
     OscilloscopeDisplay.bar(context, height - bottom, bottom);
-    this.drawScaleBadges(context, first);
-    OscilloscopeDisplay.text(context, this.gainsText(), { x: width - margin, y: first }, STYLES.gains);
-    const readout = this.scope.state.measurements ? this.readout() : OscilloscopeDisplay.TEXT.hidden;
-    OscilloscopeDisplay.text(
-      context,
-      readout,
-      { x: margin, y: height - bottom * ROWS.second },
-      STYLES.readout,
-    );
+    this.drawScaleBadges(context, first, scale);
+    OscilloscopeDisplay.text(context, gains, { x: width - margin, y: first }, STYLES.gains);
+    const second = { x: margin, y: height - bottom * ROWS.second };
+    OscilloscopeDisplay.text(context, readout, second, STYLES.readout);
   }
 
   /**
@@ -353,9 +407,9 @@ export class OscilloscopeDisplay {
    *
    * @param context Contexto 2D.
    * @param y Línea media.
+   * @param scale Escala vertical (texto).
    */
-  private drawScaleBadges(context: CanvasRenderingContext2D, y: number): void {
-    const scale = OscilloscopeDisplay.units(this.scope.voltsPerDivision, 'V');
+  private drawScaleBadges(context: CanvasRenderingContext2D, y: number, scale: string): void {
     const { COLORS, FONT } = OscilloscopeDisplay;
     let x = FONT.margin;
     OscilloscopeDisplay.CHANNELS.forEach(({ color }, index) => {
@@ -413,10 +467,13 @@ export class OscilloscopeDisplay {
    * Altura en pantalla de un valor según la escala y la posición, recortada al área de trazado.
    *
    * @param value Valor de la señal (V).
+   * @param area Área de trazado.
+   * @param area.top Borde superior.
+   * @param area.plotHeight Alto.
    * @returns Coordenada vertical en píxeles.
    */
-  private plotY(value: number): number {
-    const { top, plotHeight } = OscilloscopeDisplay.plotArea();
+  private plotY(value: number, area: { top: number; plotHeight: number }): number {
+    const { top, plotHeight } = area;
     const divisions = value / this.scope.voltsPerDivision + this.scope.state.position;
     const y = top + plotHeight / 2 - divisions * (plotHeight / this.scope.divisions.rows);
     return Math.min(Math.max(y, top), top + plotHeight);
@@ -445,6 +502,19 @@ export class OscilloscopeDisplay {
     context.fillRect(left, bar.y, bar.width, bar.height);
     context.fillStyle = OscilloscopeDisplay.COLORS.run;
     context.fillRect(left, bar.y, bar.width * Math.min(Math.max(progress, 0), 1), bar.height);
+  }
+
+  /**
+   * Traza el camino actual con un color y un grosor.
+   *
+   * @param context Contexto 2D.
+   * @param color Color.
+   * @param lineWidth Grosor.
+   */
+  private static strokePath(context: CanvasRenderingContext2D, color: string, lineWidth: number): void {
+    context.strokeStyle = color;
+    context.lineWidth = lineWidth;
+    context.stroke();
   }
 
   /**
