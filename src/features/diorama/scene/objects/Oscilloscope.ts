@@ -26,6 +26,7 @@ import { OscilloscopeDisplay } from './OscilloscopeDisplay';
 import { OscilloscopePanel } from './OscilloscopePanel';
 import { PanelArtPainter } from './PanelArtPainter';
 import { ScopeKey } from './ScopeKey';
+import { ScopeHalos } from './ScopeHalos';
 import { ScopeKnob } from './ScopeKnob';
 
 /**
@@ -79,7 +80,8 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable, D
   private readonly display: OscilloscopeDisplay;
   private readonly painter: PanelArtPainter;
   private readonly keys: ScopeKey[] = [];
-  private readonly dials: { id: ScopeControlId; knob: ScopeKnob }[] = [];
+  private readonly dials: { id: ScopeControlId; knob: ScopeKnob; halo: number }[] = [];
+  private readonly halos = new ScopeHalos();
   private sinceRefresh = Infinity;
   private intro = 0;
   private powered: boolean;
@@ -157,7 +159,7 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable, D
    */
   public highlight(id: ScopeControlId | null): void {
     this.dials.forEach((entry) => {
-      entry.knob.setHighlight(entry.id === id);
+      this.halos.setLit(entry.halo, entry.id === id);
     });
     this.keys.forEach((key) => {
       key.setHighlight(key.key.control !== undefined && key.key.control === id);
@@ -199,7 +201,8 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable, D
     this.buildConnectors();
     this.root.position.copy(this.placement.position);
     this.root.rotation.y = this.placement.rotationY;
-    this.settle(...this.keys.map((key) => key.hitArea), ...this.dials.map(({ knob }) => knob.group));
+    const moving = [...this.keys.map((key) => key.hitArea), ...this.dials.map(({ knob }) => knob.group)];
+    this.settle(...moving, this.halos.mesh);
     this.setPower(0);
     this.syncKnobs();
     this.subscribe();
@@ -285,9 +288,7 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable, D
       const lit = key.key.control === 'power' ? this.intro : level;
       key.setLight(lamp === 'off' ? 0 : lit, lamp === 'alert');
     });
-    this.dials.forEach(({ knob }) => {
-      knob.setAvailable(this.powered);
-    });
+    this.halos.setAvailable(this.powered);
   }
 
   /**
@@ -396,24 +397,20 @@ export class Oscilloscope extends SceneObject implements Updatable, Powerable, D
   }
 
   /**
-   * Perillas: las que ajustan algo quedan registradas para el puntero.
+   * Perillas: las que ajustan algo quedan registradas para el puntero, con sus anillos de luz dibujados juntos.
    */
   private buildKnobs(): void {
     const body = new MeshStandardMaterial({ color: Oscilloscope.COLORS.knob, roughness: 0.45 });
     const cap = new MeshStandardMaterial(Oscilloscope.KNOB_CAP);
     this.panel.knobs().forEach(({ x, y, radius, control }) => {
-      const knob = new ScopeKnob(
-        radius,
-        radius * Oscilloscope.KNOB_DEPTH,
-        { body, cap },
-        control !== undefined,
-      );
+      const knob = new ScopeKnob(radius, radius * Oscilloscope.KNOB_DEPTH, { body, cap }, false);
       knob.group.position.copy(this.front(x, y, 0));
       this.root.add(knob.group);
       if (control) {
-        this.dials.push({ id: control, knob });
+        this.dials.push({ id: control, knob, halo: this.halos.add(radius, knob.group.position) });
       }
     });
+    this.root.add(this.halos.build());
   }
 
   /**

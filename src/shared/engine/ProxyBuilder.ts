@@ -1,17 +1,20 @@
-import { MeshBasicMaterial, MeshStandardMaterial, type Material, type Mesh, type Texture } from 'three';
+import { MeshBasicMaterial, MeshStandardMaterial, type Material, type Texture } from 'three';
 import { ProxyAtlas } from './ProxyAtlas';
 import { ProxyBatch } from './ProxyBatch';
 import type { ProxyGroup } from './ProxyGroup';
-import type { ProxyKey } from './ProxyKey';
+import { ProxyKey } from './ProxyKey';
 import type { ProxyKind } from './ProxyKind';
+import type { ProxyPart } from './ProxyPart';
 import type { ProxySource } from './ProxySource';
 
 /**
  * Arma los lotes de un grupo de la versión unida (patrón Builder): si las mallas tienen texturas distintas las
- * reparte en tandas que quepan en un atlas cada una, y guarda cómo estaba cada malla al copiarla.
+ * reparte en tandas que quepan en un atlas cada una, y guarda cómo estaba cada malla al copiarla. Las texturas
+ * van al atlas a la mitad de su tamaño, salvo las de los letreros (texturas que también dan el brillo y caras
+ * impresas de mallas con varios materiales): llevan texto chico que se lee de cerca y van completas.
  */
 export class ProxyBuilder {
-  private static readonly ATLAS = { scale: 0.5, size: 4096 };
+  private static readonly ATLAS = { scale: 0.5, sharp: 1, size: 4096 };
 
   /**
    * Prepara el armador.
@@ -36,13 +39,13 @@ export class ProxyBuilder {
    * Arma los lotes de un grupo.
    *
    * @param kind Tipo de lote.
-   * @param meshes Mallas del grupo (dos o más).
+   * @param parts Partes del grupo (dos o más).
    * @param rigid Si el lote es articulado (sus mallas se mueven).
    * @returns Grupo armado (vacío si no se pudo unir).
    */
-  public build(kind: ProxyKind, meshes: readonly Mesh[], rigid = false): ProxyGroup {
-    const [first] = meshes;
-    const chunks = first && this.keys.atlased(first) ? this.chunks(meshes) : [meshes];
+  public build(kind: ProxyKind, parts: readonly ProxyPart[], rigid = false): ProxyGroup {
+    const [first] = parts;
+    const chunks = first && this.keys.atlased(first) ? this.chunks(parts) : [parts];
     const batches: ProxyBatch[] = [];
     const sources: ProxySource[] = [];
     chunks.forEach((chunk) => {
@@ -52,17 +55,17 @@ export class ProxyBuilder {
       });
       if (batch) {
         batches.push(batch);
-        sources.push(...chunk.map((mesh) => ProxyBuilder.snapshot(mesh, rigid)));
+        sources.push(...chunk.map((part) => ProxyBuilder.snapshot(part, rigid)));
       }
     });
-    return { meshes, batches, sources };
+    return { parts, batches, sources };
   }
 
   /**
    * Crea un lote (con su atlas si hace falta), o `null` si no tiene con quién unirse o no se pudo.
    *
    * @param kind Tipo de lote.
-   * @param meshes Mallas del lote.
+   * @param parts Partes del lote.
    * @param options Cómo se arma.
    * @param options.atlased Si sus texturas van en un atlas.
    * @param options.rigid Si es articulado.
@@ -70,17 +73,17 @@ export class ProxyBuilder {
    */
   private batch(
     kind: ProxyKind,
-    meshes: readonly Mesh[],
+    parts: readonly ProxyPart[],
     { atlased, rigid }: { atlased: boolean; rigid: boolean },
   ): ProxyBatch | null {
-    const [first] = meshes;
-    if (!first || meshes.length < 2) {
+    const [first] = parts;
+    if (!first || parts.length < 2) {
       return null;
     }
-    const { scale, size } = ProxyBuilder.ATLAS;
-    const atlas = atlased ? new ProxyAtlas(this.texturesOf(meshes), scale, size) : null;
+    const size = ProxyBuilder.ATLAS.size;
+    const atlas = atlased ? new ProxyAtlas(this.texturesOf(parts), ProxyBuilder.scale(parts), size) : null;
     try {
-      return new ProxyBatch(kind, meshes, { atlas, layers: this.keys.layersOf(first), rigid });
+      return new ProxyBatch(kind, parts, { atlas, layers: this.keys.layersOf(first.mesh), rigid });
     } catch {
       atlas?.texture.dispose();
       return null;
@@ -88,48 +91,68 @@ export class ProxyBuilder {
   }
 
   /**
-   * Parte un grupo de mallas con textura en tandas cuyas texturas quepan en un atlas.
+   * Parte un grupo de partes con textura en tandas cuyas texturas quepan en un atlas.
    *
-   * @param meshes Mallas del grupo.
+   * @param parts Partes del grupo.
    * @returns Tandas.
    */
-  private chunks(meshes: readonly Mesh[]): Mesh[][] {
-    const { scale, size } = ProxyBuilder.ATLAS;
-    const chunks: Mesh[][] = [[]];
-    meshes.forEach((mesh) => {
+  private chunks(parts: readonly ProxyPart[]): ProxyPart[][] {
+    const size = ProxyBuilder.ATLAS.size;
+    const scale = ProxyBuilder.scale(parts);
+    const chunks: ProxyPart[][] = [[]];
+    parts.forEach((part) => {
       const current = chunks[chunks.length - 1] ?? [];
-      const textures = this.texturesOf([...current, mesh]);
+      const textures = this.texturesOf([...current, part]);
       if (current.length > 0 && !ProxyAtlas.fits(textures, scale, size)) {
-        chunks.push([mesh]);
+        chunks.push([part]);
       } else {
-        current.push(mesh);
+        current.push(part);
       }
     });
     return chunks;
   }
 
   /**
-   * Texturas de color (sin repetir) de unas mallas.
+   * Texturas de color (sin repetir) de unas partes.
    *
-   * @param meshes Mallas.
+   * @param parts Partes.
    * @returns Texturas.
    */
-  private texturesOf(meshes: readonly Mesh[]): Texture[] {
-    const maps = meshes.map((mesh) => ProxyBuilder.mapOf(mesh.material as Material));
+  private texturesOf(parts: readonly ProxyPart[]): Texture[] {
+    const maps = parts.map((part) => ProxyBuilder.mapOf(part.material));
     return [...new Set(maps.filter((map): map is Texture => map !== null))];
   }
 
   /**
-   * Estado de una malla al copiarla.
+   * Escala de copia al atlas de cada textura de unas partes: completa para las de los letreros, la mitad para
+   * las demás.
    *
-   * @param mesh Malla.
+   * @param parts Partes.
+   * @returns Escala por textura.
+   */
+  private static scale(parts: readonly ProxyPart[]): (texture: Texture) => number {
+    const sharp = new Set<Texture>();
+    parts.forEach(({ material, slot }) => {
+      const map = ProxyBuilder.mapOf(material);
+      if (map && (slot >= 0 || ProxyKey.glowsWithMap(material))) {
+        sharp.add(map);
+      }
+    });
+    const { scale, sharp: full } = ProxyBuilder.ATLAS;
+    return (texture: Texture): number => (sharp.has(texture) ? full : scale);
+  }
+
+  /**
+   * Estado de una parte al copiarla.
+   *
+   * @param part Parte de una malla.
    * @param rigid Si va en un lote articulado.
    * @returns Estado copiado.
    */
-  private static snapshot(mesh: Mesh, rigid: boolean): ProxySource {
-    const material = mesh.material as Material;
+  private static snapshot(part: ProxyPart, rigid: boolean): ProxySource {
+    const { mesh, material, slot } = part;
     const map = ProxyBuilder.mapOf(material);
     const matrix = mesh.matrixWorld.clone();
-    return { mesh, matrix, material, map, version: map?.version ?? 0, visible: mesh.visible, rigid };
+    return { mesh, matrix, material, map, version: map?.version ?? 0, visible: mesh.visible, rigid, slot };
   }
 }

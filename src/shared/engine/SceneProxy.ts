@@ -1,4 +1,4 @@
-import { Group, Mesh, SkinnedMesh, type Material, type Object3D, type Scene } from 'three';
+import { Group, Mesh, SkinnedMesh, type Object3D, type Scene } from 'three';
 import type { ProxyBatch } from './ProxyBatch';
 import { ProxyBuilder } from './ProxyBuilder';
 import { ProxyCover } from './ProxyCover';
@@ -6,6 +6,8 @@ import type { ProxyGroup } from './ProxyGroup';
 import { ProxyKey } from './ProxyKey';
 import { ProxyRig } from './ProxyRig';
 import type { ProxyKind } from './ProxyKind';
+import type { ProxyPart } from './ProxyPart';
+import { ProxyParts } from './ProxyParts';
 import type { ProxySource } from './ProxySource';
 import { ProxyWatch } from './ProxyWatch';
 import type { RenderGate } from './RenderGate';
@@ -24,7 +26,9 @@ import type { Updatable } from './Updatable';
  * vez (un servo) queda como original para siempre. Lo que no se puede unir sin cambiar el resultado
  * (transparencias, shaders propios, instancias, lo que se refleja en los charcos) se dibuja siempre como
  * original. Los subárboles que cubre por completo se ocultan enteros para que three.js ni los recorra, y avisa
- * qué piezas quedaron quietas ({@link SceneProxy.onSettled}) para congelar sus matrices.
+ * qué piezas quedaron quietas ({@link SceneProxy.onSettled}) para congelar sus matrices. Una malla con varios
+ * materiales entra grupo por grupo ({@link ProxyParts}), cada grupo en el lote de su material, pero entra
+ * entera o no entra: si a una de sus partes le falta con quién unirse, se queda original.
  */
 export class SceneProxy implements Updatable {
   private static readonly REASON = 'proxy';
@@ -37,6 +41,7 @@ export class SceneProxy implements Updatable {
   private readonly group = new Group();
   private readonly keys: ProxyKey;
   private readonly builder: ProxyBuilder;
+  private readonly parts = new ProxyParts();
   private readonly cover = new ProxyCover();
   private readonly watch = new ProxyWatch();
   private readonly moving = new Set<Object3D>();
@@ -315,13 +320,13 @@ export class SceneProxy implements Updatable {
    */
   private regroup(previous: Map<string, ProxyGroup>): ProxyGroup[] {
     const built: ProxyGroup[] = [];
-    this.collect().forEach(({ kind, meshes, rigid }, key) => {
+    this.collect().forEach(({ kind, parts, rigid }, key) => {
       const old = previous.get(key);
-      if (old && this.reusable(old, meshes)) {
+      if (old && this.reusable(old, parts)) {
         previous.delete(key);
         this.groups.set(key, old);
-      } else if (meshes.length > 1) {
-        const group = this.builder.build(kind, meshes, rigid);
+      } else if (parts.length > 1) {
+        const group = this.builder.build(kind, parts, rigid);
         this.groups.set(key, group);
         built.push(group);
       }
@@ -354,6 +359,12 @@ export class SceneProxy implements Updatable {
     this.batches = groups.flatMap((group) => group.batches);
     this.sources = groups.flatMap((group) => group.sources);
     this.dropped.clear();
+    this.orphans().forEach((mesh) => {
+      this.dropped.add(mesh);
+      this.batches.forEach((batch) => {
+        batch.drop(mesh);
+      });
+    });
     this.group.clear();
     this.batches.forEach((batch) => this.group.add(batch.mesh));
     this.cover.compute(this.roots, this.proxied());
@@ -361,27 +372,48 @@ export class SceneProxy implements Updatable {
   }
 
   /**
-   * Si un grupo ya armado sirve tal cual: las mismas mallas, en el mismo orden, y ninguna cambió.
+   * Mallas con varios materiales a las que les quedó alguna parte fuera de los lotes (un lote que no se pudo
+   * armar): se dibujan como originales, porque sacar la malla del render sacaría también esa parte.
+   *
+   * @returns Mallas incompletas.
+   */
+  private orphans(): Mesh[] {
+    const counts = new Map<Mesh, number>();
+    this.sources.forEach(({ mesh, slot }) => {
+      if (slot >= 0) {
+        counts.set(mesh, (counts.get(mesh) ?? 0) + 1);
+      }
+    });
+    return [...counts].filter(([mesh, count]) => count < mesh.geometry.groups.length).map(([mesh]) => mesh);
+  }
+
+  /**
+   * Si un grupo ya armado sirve tal cual: las mismas partes, en el mismo orden, y ninguna cambió.
    *
    * @param group Grupo armado.
-   * @param meshes Mallas del grupo ahora.
+   * @param parts Partes del grupo ahora.
    * @returns `true` si se puede reutilizar.
    */
-  private reusable(group: ProxyGroup, meshes: readonly Mesh[]): boolean {
+  private reusable(group: ProxyGroup, parts: readonly ProxyPart[]): boolean {
     const same =
-      group.meshes.length === meshes.length && group.meshes.every((mesh, index) => mesh === meshes[index]);
+      group.parts.length === parts.length &&
+      group.parts.every((part, index) => {
+        const other = parts[index];
+        return part.mesh === other?.mesh && part.slot === other.slot;
+      });
     return (
       same && group.sources.every((source) => !this.dropped.has(source.mesh) && this.change(source) === null)
     );
   }
 
   /**
-   * Junta las mallas visibles de la zona que se pueden unir, agrupadas por clave.
+   * Junta las partes de las mallas visibles de la zona que se pueden unir, agrupadas por clave (sin las mallas
+   * con varios materiales que no entran enteras).
    *
    * @returns Grupos.
    */
-  private collect(): Map<string, { kind: ProxyKind; meshes: Mesh[]; rigid: boolean }> {
-    const groups = new Map<string, { kind: ProxyKind; meshes: Mesh[]; rigid: boolean }>();
+  private collect(): Map<string, { kind: ProxyKind; parts: ProxyPart[]; rigid: boolean }> {
+    const groups = new Map<string, { kind: ProxyKind; parts: ProxyPart[]; rigid: boolean }>();
     const visit = (node: Object3D): void => {
       if (!node.visible || this.moving.has(node)) {
         return;
@@ -392,25 +424,33 @@ export class SceneProxy implements Updatable {
       node.children.forEach(visit);
     };
     this.roots.forEach(visit);
+    SceneProxy.prune(groups);
     return groups;
   }
 
   /**
-   * Pone una malla en el grupo de su clave, si se puede unir.
+   * Pone las partes de una malla en el grupo de su clave, si todas se pueden unir.
    *
    * @param mesh Malla.
    * @param groups Grupos por clave.
    */
-  private sort(mesh: Mesh, groups: Map<string, { kind: ProxyKind; meshes: Mesh[]; rigid: boolean }>): void {
-    const kind = this.keys.kind(mesh);
-    if (!kind) {
+  private sort(
+    mesh: Mesh,
+    groups: Map<string, { kind: ProxyKind; parts: ProxyPart[]; rigid: boolean }>,
+  ): void {
+    const parts = this.parts.of(mesh) ?? [];
+    const kinds = parts.map((part) => this.keys.kind(part));
+    if (parts.length === 0 || kinds.includes(null)) {
       return;
     }
     const rigid = this.restless.has(mesh);
-    const key = rigid ? `${SceneProxy.RIGID}|${this.keys.of(mesh, kind)}` : this.keys.of(mesh, kind);
-    const group = groups.get(key) ?? { kind, meshes: [], rigid };
-    group.meshes.push(mesh);
-    groups.set(key, group);
+    parts.forEach((part, index) => {
+      const kind = kinds[index] ?? 'lit';
+      const key = rigid ? `${SceneProxy.RIGID}|${this.keys.of(part, kind)}` : this.keys.of(part, kind);
+      const group = groups.get(key) ?? { kind, parts: [], rigid };
+      group.parts.push(part);
+      groups.set(key, group);
+    });
   }
 
   /**
@@ -454,8 +494,8 @@ export class SceneProxy implements Updatable {
    */
   private replaced(source: ProxySource): boolean {
     const { mesh, material, map, version, visible } = source;
-    const current = mesh.material as Material;
-    const texture = ProxyBuilder.mapOf(current);
+    const current = ProxyParts.materialOf(mesh, source.slot);
+    const texture = current ? ProxyBuilder.mapOf(current) : null;
     if (current !== material || texture !== map || (texture?.version ?? 0) !== version) {
       return true;
     }
@@ -493,6 +533,33 @@ export class SceneProxy implements Updatable {
     this.settledListeners.forEach((listener) => {
       listener(still);
     });
+  }
+
+  /**
+   * Saca de los grupos las mallas con varios materiales que tienen alguna parte sola en su grupo (esa parte no
+   * tendría lote): quedan originales enteras. Se repite hasta que no quede ninguna, porque sacar una malla
+   * puede dejar sola la parte de otra.
+   *
+   * @param groups Grupos por clave.
+   */
+  private static prune(groups: Map<string, { parts: ProxyPart[] }>): void {
+    for (;;) {
+      const alone = new Set<Mesh>();
+      groups.forEach(({ parts }) => {
+        if (parts.length < 2) {
+          parts.filter((part) => part.slot >= 0).forEach((part) => alone.add(part.mesh));
+        }
+      });
+      if (alone.size === 0) {
+        return;
+      }
+      groups.forEach((group, key) => {
+        group.parts = group.parts.filter((part) => !alone.has(part.mesh));
+        if (group.parts.length === 0) {
+          groups.delete(key);
+        }
+      });
+    }
   }
 
   /**

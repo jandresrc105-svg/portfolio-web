@@ -9,7 +9,9 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ProxyAtlas } from './ProxyAtlas';
 import type { ProxyEntry } from './ProxyEntry';
+import { ProxyKey } from './ProxyKey';
 import type { ProxyKind } from './ProxyKind';
+import type { ProxyPart } from './ProxyPart';
 import { ProxyRig } from './ProxyRig';
 import { ProxyShader } from './ProxyShader';
 
@@ -33,7 +35,7 @@ export class ProxyBatch {
   public readonly mesh: Mesh;
 
   private readonly entries: ProxyEntry[];
-  private readonly ranges = new Map<Mesh, { start: number; count: number }>();
+  private readonly ranges = new Map<Mesh, { start: number; count: number }[]>();
   private readonly current: Float32Array;
   private readonly atlas: ProxyAtlas | null;
   private readonly rigid: boolean;
@@ -42,7 +44,7 @@ export class ProxyBatch {
    * Arma el lote.
    *
    * @param kind Tipo de lote.
-   * @param sources Mallas originales (misma clave), con sus matrices del mundo al día.
+   * @param sources Partes de mallas originales (misma clave), con sus matrices del mundo al día.
    * @param options Opciones del lote.
    * @param options.atlas Atlas con las texturas de color de las mallas (si las tienen distintas), o `null`.
    * @param options.layers Capas del lote (las de sus mallas: la cámara y, si brillan, el reflejo).
@@ -50,7 +52,7 @@ export class ProxyBatch {
    */
   public constructor(
     private readonly kind: ProxyKind,
-    sources: readonly Mesh[],
+    sources: readonly ProxyPart[],
     options: { atlas: ProxyAtlas | null; layers: number; rigid: boolean },
   ) {
     this.atlas = options.atlas;
@@ -60,7 +62,8 @@ export class ProxyBatch {
     this.index(sources);
     const geometry = this.geometry(sources);
     const material = this.material(sources);
-    this.mesh = this.rigid ? ProxyBatch.RIG.mesh(geometry, material, sources) : new Mesh(geometry, material);
+    const bones = sources.map((part) => part.mesh);
+    this.mesh = this.rigid ? ProxyBatch.RIG.mesh(geometry, material, bones) : new Mesh(geometry, material);
     this.mesh.layers.mask = options.layers;
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrixWorldAutoUpdate = false;
@@ -88,18 +91,20 @@ export class ProxyBatch {
   }
 
   /**
-   * Apaga en el lote los vértices de una malla (que ahora se dibuja como original).
+   * Apaga en el lote los vértices de una malla (todas sus partes: ahora se dibuja como original).
    *
    * @param mesh Malla original.
    */
   public drop(mesh: Mesh): void {
-    const range = this.ranges.get(mesh);
-    if (!range) {
+    const ranges = this.ranges.get(mesh);
+    if (!ranges) {
       return;
     }
     const attribute = this.mesh.geometry.getAttribute('proxyVisible') as BufferAttribute;
-    (attribute.array as Float32Array).fill(0, range.start, range.start + range.count);
-    attribute.addUpdateRange(range.start, range.count);
+    ranges.forEach(({ start, count }) => {
+      (attribute.array as Float32Array).fill(0, start, start + count);
+      attribute.addUpdateRange(start, count);
+    });
     attribute.needsUpdate = true;
   }
 
@@ -131,15 +136,17 @@ export class ProxyBatch {
   }
 
   /**
-   * Anota el rango de vértices de cada malla en la geometría unida.
+   * Anota los rangos de vértices de cada malla (uno por parte) en la geometría unida.
    *
-   * @param sources Mallas originales, en el orden en que se unen.
+   * @param sources Partes, en el orden en que se unen.
    */
-  private index(sources: readonly Mesh[]): void {
+  private index(sources: readonly ProxyPart[]): void {
     let start = 0;
-    sources.forEach((mesh) => {
-      const count = mesh.geometry.getAttribute('position').count;
-      this.ranges.set(mesh, { start, count });
+    sources.forEach(({ mesh, geometry }) => {
+      const count = geometry.getAttribute('position').count;
+      const ranges = this.ranges.get(mesh) ?? [];
+      ranges.push({ start, count });
+      this.ranges.set(mesh, ranges);
       start += count;
     });
   }
@@ -147,12 +154,12 @@ export class ProxyBatch {
   /**
    * Lleva cada geometría al mundo, le agrega los atributos por vértice y las une.
    *
-   * @param sources Mallas originales.
+   * @param sources Partes de las mallas originales.
    * @returns Geometría unida.
    * @throws {Error} Si las geometrías no se pueden unir (atributos incompatibles).
    */
-  private geometry(sources: readonly Mesh[]): BufferGeometry {
-    const parts = sources.map((mesh, bone) => this.part(mesh, bone));
+  private geometry(sources: readonly ProxyPart[]): BufferGeometry {
+    const parts = sources.map((source, bone) => this.part(source, bone));
     const merged = mergeGeometries(parts) as BufferGeometry | null;
     parts.forEach((part) => {
       part.dispose();
@@ -164,21 +171,21 @@ export class ProxyBatch {
   }
 
   /**
-   * Copia de la geometría de una malla en el mundo (o en su espacio, atada a su hueso, si el lote es
-   * articulado), con los atributos por vértice (vacíos) del lote.
+   * Copia de la geometría de una parte en el mundo (o en el espacio de su malla, atada a su hueso, si el lote
+   * es articulado), con los atributos por vértice (vacíos) del lote.
    *
-   * @param mesh Malla original.
-   * @param bone Posición de la malla en el lote (su hueso, si es articulado).
+   * @param source Parte de una malla original.
+   * @param bone Posición de la parte en el lote (su hueso, si es articulado).
    * @returns Geometría lista para unir.
    */
-  private part(mesh: Mesh, bone: number): BufferGeometry {
-    const part = this.place(mesh, bone);
+  private part(source: ProxyPart, bone: number): BufferGeometry {
+    const part = this.place(source, bone);
     const count = part.getAttribute('position').count;
     const attribute = (size: number): BufferAttribute =>
       new BufferAttribute(new Float32Array(count * size), size);
     part.setAttribute('color', attribute(ProxyBatch.RGB));
     part.setAttribute('proxyVisible', new BufferAttribute(new Float32Array(count).fill(1), 1));
-    this.remap(part, mesh);
+    this.remap(part, source.material);
     if (this.kind === 'lit') {
       part.setAttribute('proxyEmissive', attribute(ProxyBatch.RGB));
       part.setAttribute('proxySurface', attribute(ProxyBatch.SURFACE));
@@ -187,16 +194,17 @@ export class ProxyBatch {
   }
 
   /**
-   * Copia la geometría de una malla en el espacio del lote: el mundo, o el de la malla atada a su hueso si el
+   * Copia la geometría de una parte en el espacio del lote: el mundo, o el de su malla atada a su hueso si el
    * lote es articulado. Si la malla está espejada invierte sus triángulos. Copia sobre una geometría base (no
    * `clone`): clonar una `CylinderGeometry` o similar arma primero una por defecto que se descarta enseguida.
    *
-   * @param mesh Malla original.
-   * @param bone Posición de la malla en el lote.
+   * @param source Parte de una malla original.
+   * @param bone Posición de la parte en el lote.
    * @returns Copia de la geometría.
    */
-  private place(mesh: Mesh, bone: number): BufferGeometry {
-    const part = new BufferGeometry().copy(mesh.geometry);
+  private place(source: ProxyPart, bone: number): BufferGeometry {
+    const mesh = source.mesh;
+    const part = new BufferGeometry().copy(source.geometry);
     if (this.rigid) {
       ProxyBatch.RIG.attach(part, bone);
     } else {
@@ -209,13 +217,13 @@ export class ProxyBatch {
   }
 
   /**
-   * Lleva las coordenadas de textura de una malla a su rincón del atlas.
+   * Lleva las coordenadas de textura de una parte a su rincón del atlas.
    *
    * @param part Geometría copiada.
-   * @param mesh Malla original (su material dice qué textura usa).
+   * @param material Material original de la parte (dice qué textura usa).
    */
-  private remap(part: BufferGeometry, mesh: Mesh): void {
-    const map = (mesh.material as MeshBasicMaterial).map;
+  private remap(part: BufferGeometry, material: Material): void {
+    const map = (material as MeshBasicMaterial).map;
     if (!this.atlas || !map) {
       return;
     }
@@ -282,13 +290,19 @@ export class ProxyBatch {
   }
 
   /**
-   * Material del lote, copiado del primer material del grupo (con el atlas como textura, si hay).
+   * Material del lote, copiado del primer material del grupo (con el atlas como textura, si hay; y también
+   * como textura de brillo si el brillo de esos materiales sale de su textura de color).
    *
-   * @param sources Mallas originales.
+   * @param sources Partes de las mallas originales.
    * @returns Material del lote.
+   * @throws {Error} Si no hay partes.
    */
-  private material(sources: readonly Mesh[]): Material {
-    const template = sources[0]?.material as Material;
+  private material(sources: readonly ProxyPart[]): Material {
+    const [first] = sources;
+    if (!first) {
+      throw new Error('ProxyBatch: lote sin partes');
+    }
+    const template = first.material;
     const shader = new ProxyShader();
     const material =
       this.kind === 'lit'
@@ -296,6 +310,9 @@ export class ProxyBatch {
         : shader.basic(template as MeshBasicMaterial);
     if (this.atlas) {
       (material as MeshBasicMaterial).map = this.atlas.texture;
+    }
+    if (this.atlas && material instanceof MeshStandardMaterial && ProxyKey.glowsWithMap(template)) {
+      material.emissiveMap = this.atlas.texture;
     }
     return material;
   }
@@ -338,19 +355,18 @@ export class ProxyBatch {
   }
 
   /**
-   * Agrupa las mallas por material, con el rango de vértices que ocupa cada una en la geometría unida.
+   * Agrupa las partes por material, con el rango de vértices que ocupa cada una en la geometría unida.
    *
-   * @param sources Mallas originales, en el orden en que se unen.
+   * @param sources Partes, en el orden en que se unen.
    * @param stride Cantidad de valores copiados por material.
    * @returns Entradas por material.
    */
-  private static group(sources: readonly Mesh[], stride: number): ProxyEntry[] {
+  private static group(sources: readonly ProxyPart[], stride: number): ProxyEntry[] {
     const entries = new Map<Material, ProxyEntry>();
     let start = 0;
-    sources.forEach((mesh) => {
-      const material = mesh.material as Material;
+    sources.forEach(({ material, geometry }) => {
       const entry = entries.get(material) ?? { material, ranges: [], last: new Float32Array(stride) };
-      const count = mesh.geometry.getAttribute('position').count;
+      const count = geometry.getAttribute('position').count;
       entry.ranges.push({ start, count });
       entries.set(material, entry);
       start += count;

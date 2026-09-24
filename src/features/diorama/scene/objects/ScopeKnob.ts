@@ -4,11 +4,11 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
-  TorusGeometry,
   type Material,
   type Object3D,
 } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
+import { ScopeHalos } from './ScopeHalos';
 
 /**
  * Perilla de instrumento: cuerpo moleteado, tapa metálica y línea indicadora. Gira entre sus topes según
@@ -19,15 +19,14 @@ export class ScopeKnob {
   private static readonly CAP = { radius: 0.62, depth: 0.35 };
   private static readonly MARK = { width: 0.14, length: 0.5, depth: 0.1 };
   private static readonly SKIRT = { radius: 1.12, depth: 0.25 };
-  private static readonly HALO = { radius: 1.35, tube: 0.07, color: 0x3fd8ff, dim: 0.35, lit: 1.6 };
   private static readonly MARK_COLOR = 0xf2f2f2;
+  private static readonly ORIGIN = { x: 0, y: 0, z: 0 };
 
   public readonly group = new Group();
   public readonly hitArea: Object3D;
 
   private readonly turn = new Group();
-  private readonly halo = new MeshBasicMaterial({ color: ScopeKnob.HALO.color, transparent: true });
-  private readonly haloMesh: Mesh | null;
+  private readonly halos: ScopeHalos | null;
 
   /**
    * Crea la perilla (mira hacia +z, con la base en z = 0).
@@ -37,7 +36,8 @@ export class ScopeKnob {
    * @param materials Materiales del cuerpo, la falda y la tapa.
    * @param materials.body Goma del cuerpo.
    * @param materials.cap Metal de la tapa.
-   * @param interactive Si muestra el anillo de luz (perillas que el visitante puede girar).
+   * @param interactive Si muestra su propio anillo de luz (perillas que el visitante puede girar; un equipo con
+   * varias perillas puede dibujar todos sus anillos juntos con {@link ScopeHalos} y pasar `false`).
    */
   public constructor(
     radius: number,
@@ -51,11 +51,11 @@ export class ScopeKnob {
       this.turn,
       ScopeKnob.cylinder(radius * skirt, depth * skirtDepth, GeometryDetail.Curve, materials.body),
     );
-    this.haloMesh = interactive ? this.buildHalo(radius) : null;
-    if (this.haloMesh) {
-      this.group.add(this.haloMesh);
+    this.halos = interactive ? new ScopeHalos() : null;
+    if (this.halos) {
+      this.halos.add(radius, ScopeKnob.ORIGIN);
+      this.group.add(this.halos.build());
     }
-    this.setHighlight(false);
   }
 
   /**
@@ -75,9 +75,7 @@ export class ScopeKnob {
    * @param lit Si está señalada o se está girando.
    */
   public setHighlight(lit: boolean): void {
-    const { dim, lit: bright } = ScopeKnob.HALO;
-    this.halo.color.set(ScopeKnob.HALO.color).multiplyScalar(lit ? bright : dim);
-    this.halo.opacity = lit ? 1 : dim;
+    this.halos?.setLit(0, lit);
   }
 
   /**
@@ -86,9 +84,7 @@ export class ScopeKnob {
    * @param available Si la perilla responde.
    */
   public setAvailable(available: boolean): void {
-    this.haloMesh?.traverse((node) => {
-      node.visible = available;
-    });
+    this.halos?.setAvailable(available);
   }
 
   /**
@@ -119,20 +115,6 @@ export class ScopeKnob {
     mark.position.set(0, radius * (1 - length / 2 - width), depth + (radius * markDepth) / 2);
     this.turn.add(body, cap, mark);
     return body;
-  }
-
-  /**
-   * Anillo de luz alrededor de la base.
-   *
-   * @param radius Radio de la perilla.
-   * @returns Malla del anillo.
-   */
-  private buildHalo(radius: number): Mesh {
-    const { radius: size, tube } = ScopeKnob.HALO;
-    return new Mesh(
-      new TorusGeometry(radius * size, radius * tube, GeometryDetail.Thin, GeometryDetail.Curve),
-      this.halo,
-    );
   }
 
   /**

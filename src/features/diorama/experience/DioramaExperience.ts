@@ -140,7 +140,7 @@ export class DioramaExperience {
    * @returns Promesa que se resuelve cuando la escena está lista para mostrarse.
    */
   public async prepare(width: number, height: number): Promise<void> {
-    this.diorama.build(this.stage.scene);
+    this.diorama.build(this.stage.scene, this.stage.camera);
     this.bakeEnvironment();
     this.diorama.markers.forEach((marker) => {
       this.picker.register(marker.hitArea, marker);

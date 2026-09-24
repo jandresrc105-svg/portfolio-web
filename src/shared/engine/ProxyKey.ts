@@ -12,11 +12,12 @@ import {
 } from 'three';
 import { RenderLayer } from './RenderLayer';
 import type { ProxyKind } from './ProxyKind';
+import type { ProxyPart } from './ProxyPart';
 import type { RenderGate } from './RenderGate';
 
 /**
- * Decide qué mallas pueden entrar en la versión unida de una zona y con qué otras comparten lote. Entran las
- * mallas opacas de un solo material estándar o básico (sin shaders propios); todo lo que cambia el shader o el
+ * Decide qué partes de mallas pueden entrar en la versión unida de una zona y con qué otras comparten lote.
+ * Entran las partes opacas de material estándar o básico (sin shaders propios); todo lo que cambia el shader o el
  * orden de dibujo (mapas, lados, niebla, tono, formato de los atributos) va en la clave, así el lote se dibuja
  * igual que cada original. Lo que cambia con el tiempo (color, brillo, rugosidad, metal) no va en la clave: lo
  * copia el lote por vértice en cada frame.
@@ -36,6 +37,21 @@ export class ProxyKey {
   public constructor(private readonly gate: RenderGate) {}
 
   /**
+   * Si el brillo de un material sale de su misma textura de color (un cartel que se ilumina): entonces el
+   * atlas sirve también como textura de brillo.
+   *
+   * @param material Material.
+   * @returns `true` si su textura de brillo es la de color.
+   */
+  public static glowsWithMap(material: Material): boolean {
+    return (
+      material instanceof MeshStandardMaterial &&
+      material.map !== null &&
+      material.emissiveMap === material.map
+    );
+  }
+
+  /**
    * Capas del lote de una malla: las que tiene fuera de la compuerta (la cámara y, si brilla, el reflejo).
    *
    * @param mesh Malla.
@@ -46,48 +62,48 @@ export class ProxyKey {
   }
 
   /**
-   * Tipo de lote de una malla, o `null` si debe quedarse como está.
+   * Tipo de lote de una parte, o `null` si debe quedarse como está.
    *
-   * @param mesh Malla.
+   * @param part Parte de una malla.
    * @returns Tipo de lote.
    */
-  public kind(mesh: Mesh): ProxyKind | null {
-    if (!this.accepted(mesh)) {
+  public kind(part: ProxyPart): ProxyKind | null {
+    if (!this.accepted(part)) {
       return null;
     }
-    const material = mesh.material as Material;
+    const material = part.material;
     if (material instanceof MeshStandardMaterial) {
       return material.type !== ProxyKey.PHYSICAL && !material.displacementMap ? 'lit' : null;
     }
-    return material instanceof MeshBasicMaterial && this.basicReady(mesh, material) ? 'basic' : null;
+    return material instanceof MeshBasicMaterial && this.basicReady(part, material) ? 'basic' : null;
   }
 
   /**
-   * Si la textura de color de una malla puede ir en un atlas: textura dibujable que no se repite ni se
-   * transforma, único mapa del material y coordenadas de textura dentro del rango 0–1.
+   * Si la textura de color de una parte puede ir en un atlas: textura dibujable que no se repite ni se
+   * transforma, único mapa del material (o también el de su brillo) y coordenadas de textura dentro del rango
+   * 0–1.
    *
-   * @param mesh Malla.
+   * @param part Parte de una malla.
    * @returns `true` si puede ir en un atlas.
    */
-  public atlased(mesh: Mesh): boolean {
-    const material = mesh.material as MeshStandardMaterial | MeshBasicMaterial;
+  public atlased(part: ProxyPart): boolean {
+    const material = part.material as MeshStandardMaterial | MeshBasicMaterial;
     const map = material.map;
     if (!map || !this.plainMap(map) || !this.onlyMap(material)) {
       return false;
     }
-    return this.uvInside(mesh.geometry);
+    return this.uvInside(part.geometry);
   }
 
   /**
-   * Clave del lote de una malla ya aceptada.
+   * Clave del lote de una parte ya aceptada.
    *
-   * @param mesh Malla.
+   * @param part Parte de una malla.
    * @param kind Tipo de lote.
    * @returns Clave.
    */
-  public of(mesh: Mesh, kind: ProxyKind): string {
-    const material = mesh.material as Material;
-    const geometry = mesh.geometry;
+  public of(part: ProxyPart, kind: ProxyKind): string {
+    const { material, geometry, mesh } = part;
     const attributes = Object.entries(geometry.attributes)
       .map(([name, { itemSize, normalized, array }]) =>
         [name, itemSize, normalized, array.constructor.name].join(':'),
@@ -96,31 +112,31 @@ export class ProxyKey {
     const shape = [attributes.join(','), geometry.index ? 'i' : 'n'];
     const { side, depthTest, depthWrite, polygonOffset } = material;
     const common = [side, depthTest, depthWrite, polygonOffset, this.layersOf(mesh)];
-    const atlas = this.atlased(mesh);
+    const atlas = this.atlased(part);
     const extra =
       material instanceof MeshStandardMaterial ? this.lit(material, atlas) : this.basic(material, atlas);
     return [kind, ...shape, ...common, ...extra].join('|');
   }
 
   /**
-   * Si una malla cumple todas las condiciones para entrar en un lote.
+   * Si una parte cumple todas las condiciones para entrar en un lote.
    *
-   * @param mesh Malla.
+   * @param part Parte de una malla.
    * @returns `true` si se puede unir.
    */
-  private accepted(mesh: Mesh): boolean {
-    return this.plain(mesh) && this.placed(mesh) && this.opaque(mesh.material as Material);
+  private accepted(part: ProxyPart): boolean {
+    return this.plain(part.mesh) && this.placed(part.mesh) && this.opaque(part.material);
   }
 
   /**
-   * Malla simple: sin instancias ni esqueleto, un solo material y una geometría sin atributos reservados, sin
-   * rango de dibujo parcial ni formas de mezcla.
+   * Malla simple: sin instancias ni esqueleto y una geometría sin atributos reservados, sin rango de dibujo
+   * parcial ni formas de mezcla (con varios materiales se une grupo por grupo, ver {@link ProxyParts}).
    *
    * @param mesh Malla.
    * @returns `true` si es simple.
    */
   private plain(mesh: Mesh): boolean {
-    if (mesh instanceof InstancedMesh || mesh instanceof SkinnedMesh || Array.isArray(mesh.material)) {
+    if (mesh instanceof InstancedMesh || mesh instanceof SkinnedMesh) {
       return false;
     }
     const geometry = mesh.geometry;
@@ -162,21 +178,38 @@ export class ProxyKey {
    * @returns Valores de la clave.
    */
   private lit(material: MeshStandardMaterial, atlas: boolean): (string | number | boolean)[] {
+    const { flatShading, fog, toneMapped, opacity, normalScale } = material;
+    const reflection = material.envMap ? material.envMapIntensity : '-';
+    const scales = [normalScale.x, normalScale.y, material.aoMapIntensity, material.bumpScale];
+    return [
+      ...this.litMaps(material, atlas),
+      ...[reflection, flatShading, fog, toneMapped, opacity, ...scales, material.lightMapIntensity],
+    ];
+  }
+
+  /**
+   * Parte de la clave de un material estándar que dicen sus mapas: el atlas (y si también da el brillo) y la
+   * identidad de cada mapa que no va en el atlas.
+   *
+   * @param material Material estándar.
+   * @param atlas Si su textura de color va en un atlas.
+   * @returns Valores de la clave.
+   */
+  private litMaps(material: MeshStandardMaterial, atlas: boolean): string[] {
+    const glow = atlas && ProxyKey.glowsWithMap(material);
     const maps = [
       atlas ? null : material.map,
       material.normalMap,
       material.roughnessMap,
       material.metalnessMap,
+      glow ? null : material.emissiveMap,
+      material.aoMap,
+      material.bumpMap,
+      material.lightMap,
+      material.envMap,
     ];
-    const more = [material.emissiveMap, material.aoMap, material.bumpMap, material.lightMap, material.envMap];
-    const { flatShading, fog, toneMapped, opacity, normalScale } = material;
-    const reflection = material.envMap ? material.envMapIntensity : '-';
-    const scales = [normalScale.x, normalScale.y, material.aoMapIntensity, material.bumpScale];
-    return [
-      atlas ? `atlas:${material.map?.colorSpace ?? ''}` : '-',
-      ...[...maps, ...more].map((texture) => this.texture(texture)),
-      ...[reflection, flatShading, fog, toneMapped, opacity, ...scales, material.lightMapIntensity],
-    ];
+    const marker = atlas ? `atlas:${material.map?.colorSpace ?? ''}:${glow ? 'glow' : ''}` : '-';
+    return [marker, ...maps.map((texture) => this.texture(texture))];
   }
 
   /**
@@ -196,12 +229,12 @@ export class ProxyKey {
    * Si un material básico puede ir en un lote: sin recorte por textura y sin textura de color o con una que
    * va en un atlas.
    *
-   * @param mesh Malla.
+   * @param part Parte de una malla.
    * @param material Su material básico.
    * @returns `true` si puede ir.
    */
-  private basicReady(mesh: Mesh, material: MeshBasicMaterial): boolean {
-    return !material.alphaMap && (!material.map || this.atlased(mesh));
+  private basicReady(part: ProxyPart, material: MeshBasicMaterial): boolean {
+    return !material.alphaMap && (!material.map || this.atlased(part));
   }
 
   /**
@@ -239,7 +272,7 @@ export class ProxyKey {
   }
 
   /**
-   * Si la textura de color es el único mapa del material.
+   * Si la textura de color es el único mapa del material (la de brillo puede ser la misma).
    *
    * @param material Material.
    * @returns `true` si no usa otros mapas.
@@ -251,7 +284,8 @@ export class ProxyKey {
     if (!(material instanceof MeshStandardMaterial)) {
       return true;
     }
-    const maps = [material.normalMap, material.roughnessMap, material.metalnessMap, material.emissiveMap];
+    const emissive = ProxyKey.glowsWithMap(material) ? null : material.emissiveMap;
+    const maps = [material.normalMap, material.roughnessMap, material.metalnessMap, emissive];
     return maps.every((texture) => texture === null) && material.bumpMap === null;
   }
 

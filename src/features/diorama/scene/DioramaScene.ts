@@ -1,4 +1,4 @@
-import type { Object3D, Scene, Vector3Like } from 'three';
+import type { Camera, Object3D, Scene, Vector3Like } from 'three';
 import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
@@ -31,6 +31,7 @@ import { CityBokeh } from './objects/CityBokeh';
 import { ContactShadows } from './objects/ContactShadows';
 import { FloatingDebris } from './objects/FloatingDebris';
 import { HotspotMarker } from './objects/HotspotMarker';
+import { HotspotMarkers } from './objects/HotspotMarkers';
 import { Island } from './objects/Island';
 import { KitchenProps } from './objects/KitchenProps';
 import { Lantern } from './objects/Lantern';
@@ -150,6 +151,7 @@ export class DioramaScene {
   private readonly instrument: ScopeControlService;
   private readonly weather: Weather;
   private readonly audio: AudioEngine;
+  private markerSet: HotspotMarkers | null = null;
 
   /**
    * Prepara el diorama.
@@ -284,18 +286,22 @@ export class DioramaScene {
    * Construye todas las piezas dentro de la escena.
    *
    * @param scene Escena destino.
+   * @param camera Cámara principal (los marcadores que no ve no se dibujan).
    */
-  public build(scene: Scene): void {
+  public build(scene: Scene, camera: Camera): void {
     this.buildSky(scene);
     this.buildEnvironment();
     this.buildStall();
     this.buildCounter();
     this.buildStreet();
     this.buildWorkshop();
-    this.buildMarkers();
+    this.buildMarkers(camera);
     this.updatables.push(this.grid);
     this.objects.forEach((object) => scene.add(object.create()));
     new RenderTuning().apply(scene, this.objects, this.pieces, this.luminous);
+    if (this.markerSet) {
+      scene.add(this.markerSet.create());
+    }
   }
 
   /**
@@ -305,6 +311,7 @@ export class DioramaScene {
     this.objects.forEach((object) => {
       object.dispose();
     });
+    this.markerSet?.dispose();
     this.materials.dispose();
   }
 
@@ -528,15 +535,19 @@ export class DioramaScene {
   }
 
   /**
-   * Marcadores de los puntos interactivos.
+   * Marcadores de los puntos interactivos, dibujados todos juntos.
+   *
+   * @param camera Cámara principal.
    */
-  private buildMarkers(): void {
+  private buildMarkers(camera: Camera): void {
     DioramaScene.HOTSPOTS.forEach((hotspot, index) => {
       const marker = this.animate(new HotspotMarker(hotspot));
       this.markers.push(marker);
       const { markers, markerStagger } = DioramaScene.TIMELINE;
       this.power(marker, markers + index * markerStagger, PowerMode.Fade);
     });
+    this.markerSet = new HotspotMarkers(this.markers, camera);
+    this.updatables.push(this.markerSet);
   }
 
   /**

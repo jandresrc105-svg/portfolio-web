@@ -4,7 +4,8 @@ import type { AtlasRegion } from './AtlasRegion';
 /**
  * Atlas de texturas para los lotes de la versión unida: copia varias texturas (con margen, para que no se mezclen
  * al alejarse) en un solo lienzo y dice dónde quedó cada una, así mallas con texturas distintas se dibujan en un
- * solo lote. Como la versión unida solo se ve de lejos, las texturas se copian a una escala menor.
+ * solo lote. Cada textura se copia a la escala que le toca (menor para ahorrar memoria, o completa para los
+ * letreros con texto chico).
  */
 export class ProxyAtlas {
   private static readonly PADDING = 4;
@@ -19,10 +20,10 @@ export class ProxyAtlas {
    * Arma el atlas.
    *
    * @param textures Texturas a copiar (con imagen dibujable).
-   * @param scale Escala de copia.
+   * @param scale Escala de copia de cada textura.
    * @param maxSize Lado máximo del atlas.
    */
-  public constructor(textures: readonly Texture[], scale: number, maxSize: number) {
+  public constructor(textures: readonly Texture[], scale: (texture: Texture) => number, maxSize: number) {
     ProxyAtlas.pack(textures, scale, maxSize, this.regions, this.size);
     this.texture = this.paint(textures);
   }
@@ -31,11 +32,15 @@ export class ProxyAtlas {
    * Si una lista de texturas cabe en un atlas.
    *
    * @param textures Texturas.
-   * @param scale Escala de copia.
+   * @param scale Escala de copia de cada textura.
    * @param maxSize Lado máximo.
    * @returns `true` si todas caben.
    */
-  public static fits(textures: readonly Texture[], scale: number, maxSize: number): boolean {
+  public static fits(
+    textures: readonly Texture[],
+    scale: (texture: Texture) => number,
+    maxSize: number,
+  ): boolean {
     const regions = new Map<Texture, AtlasRegion>();
     ProxyAtlas.pack(textures, scale, maxSize, regions, { width: 0, height: 0 });
     return regions.size === textures.length;
@@ -87,7 +92,7 @@ export class ProxyAtlas {
    * Acomoda las texturas en filas (de la más alta a la más baja) dentro del lado máximo.
    *
    * @param textures Texturas.
-   * @param scale Escala de copia.
+   * @param scale Escala de copia de cada textura.
    * @param maxSize Lado máximo.
    * @param regions Donde se anotan las regiones que cupieron.
    * @param size Donde se anota el tamaño usado.
@@ -96,7 +101,7 @@ export class ProxyAtlas {
    */
   private static pack(
     textures: readonly Texture[],
-    scale: number,
+    scale: (texture: Texture) => number,
     maxSize: number,
     regions: Map<Texture, AtlasRegion>,
     size: { width: number; height: number },
@@ -104,9 +109,9 @@ export class ProxyAtlas {
     const pad = ProxyAtlas.PADDING;
     const cursor = { x: pad, y: pad, row: 0 };
     const tallest = (a: Texture, b: Texture): number =>
-      ProxyAtlas.dims(b, scale).height - ProxyAtlas.dims(a, scale).height;
+      ProxyAtlas.dims(b, scale(b)).height - ProxyAtlas.dims(a, scale(a)).height;
     [...textures].sort(tallest).forEach((texture) => {
-      const region = ProxyAtlas.place(ProxyAtlas.dims(texture, scale), cursor, maxSize);
+      const region = ProxyAtlas.place(ProxyAtlas.dims(texture, scale(texture)), cursor, maxSize);
       if (region) {
         regions.set(texture, region);
         size.width = Math.max(size.width, cursor.x);
