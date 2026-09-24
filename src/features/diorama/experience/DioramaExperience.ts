@@ -4,6 +4,7 @@ import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import { SeededRandom } from '@shared/core/math/SeededRandom';
 import { AdaptiveResolution } from '@shared/engine/AdaptiveResolution';
 import { DetailCuller } from '@shared/engine/DetailCuller';
+import { LayerPruner } from '@shared/engine/LayerPruner';
 import { LightZones } from '@shared/engine/LightZones';
 import { RenderGate } from '@shared/engine/RenderGate';
 import { PointerPicker } from '@shared/engine/PointerPicker';
@@ -487,14 +488,18 @@ export class DioramaExperience {
   }
 
   /**
-   * El espejo de los charcos refleja solo la capa luminosa y se dibuja antes del render principal.
+   * El espejo de los charcos refleja solo la capa luminosa y se dibuja antes del render principal. Durante esa
+   * pasada se podan los subárboles sin nada que se refleje ({@link LayerPruner}), para no recorrerlos.
    */
   private connectMirror(): void {
     const puddles = this.diorama.puddles;
     const { renderer, scene, camera } = this.stage;
     puddles?.reflectOnly(camera, RenderLayer.Reflected);
+    const pruner = new LayerPruner(scene, RenderLayer.Reflected);
     this.stage.setBeforeRender(() => {
+      pruner.hide();
       puddles?.reflect(renderer, scene, camera);
+      pruner.restore();
     });
   }
 
