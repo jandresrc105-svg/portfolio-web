@@ -37,18 +37,22 @@ export class ProxyBuilder {
    *
    * @param kind Tipo de lote.
    * @param meshes Mallas del grupo (dos o más).
+   * @param rigid Si el lote es articulado (sus mallas se mueven).
    * @returns Grupo armado (vacío si no se pudo unir).
    */
-  public build(kind: ProxyKind, meshes: readonly Mesh[]): ProxyGroup {
+  public build(kind: ProxyKind, meshes: readonly Mesh[], rigid = false): ProxyGroup {
     const [first] = meshes;
     const chunks = first && this.keys.atlased(first) ? this.chunks(meshes) : [meshes];
     const batches: ProxyBatch[] = [];
     const sources: ProxySource[] = [];
     chunks.forEach((chunk) => {
-      const batch = this.batch(kind, chunk, first !== undefined && this.keys.atlased(first));
+      const batch = this.batch(kind, chunk, {
+        atlased: first !== undefined && this.keys.atlased(first),
+        rigid,
+      });
       if (batch) {
         batches.push(batch);
-        sources.push(...chunk.map((mesh) => ProxyBuilder.snapshot(mesh)));
+        sources.push(...chunk.map((mesh) => ProxyBuilder.snapshot(mesh, rigid)));
       }
     });
     return { meshes, batches, sources };
@@ -59,17 +63,24 @@ export class ProxyBuilder {
    *
    * @param kind Tipo de lote.
    * @param meshes Mallas del lote.
-   * @param atlased Si sus texturas van en un atlas.
+   * @param options Cómo se arma.
+   * @param options.atlased Si sus texturas van en un atlas.
+   * @param options.rigid Si es articulado.
    * @returns Lote o `null`.
    */
-  private batch(kind: ProxyKind, meshes: readonly Mesh[], atlased: boolean): ProxyBatch | null {
-    if (meshes.length < 2) {
+  private batch(
+    kind: ProxyKind,
+    meshes: readonly Mesh[],
+    { atlased, rigid }: { atlased: boolean; rigid: boolean },
+  ): ProxyBatch | null {
+    const [first] = meshes;
+    if (!first || meshes.length < 2) {
       return null;
     }
     const { scale, size } = ProxyBuilder.ATLAS;
     const atlas = atlased ? new ProxyAtlas(this.texturesOf(meshes), scale, size) : null;
     try {
-      return new ProxyBatch(kind, meshes, atlas);
+      return new ProxyBatch(kind, meshes, { atlas, layers: this.keys.layersOf(first), rigid });
     } catch {
       atlas?.texture.dispose();
       return null;
@@ -112,12 +123,13 @@ export class ProxyBuilder {
    * Estado de una malla al copiarla.
    *
    * @param mesh Malla.
+   * @param rigid Si va en un lote articulado.
    * @returns Estado copiado.
    */
-  private static snapshot(mesh: Mesh): ProxySource {
+  private static snapshot(mesh: Mesh, rigid: boolean): ProxySource {
     const material = mesh.material as Material;
     const map = ProxyBuilder.mapOf(material);
     const matrix = mesh.matrixWorld.clone();
-    return { mesh, matrix, material, map, version: map?.version ?? 0, visible: mesh.visible };
+    return { mesh, matrix, material, map, version: map?.version ?? 0, visible: mesh.visible, rigid };
   }
 }

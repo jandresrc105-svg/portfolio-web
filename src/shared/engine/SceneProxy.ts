@@ -4,6 +4,7 @@ import { ProxyBuilder } from './ProxyBuilder';
 import { ProxyCover } from './ProxyCover';
 import type { ProxyGroup } from './ProxyGroup';
 import { ProxyKey } from './ProxyKey';
+import { ProxyRig } from './ProxyRig';
 import type { ProxyKind } from './ProxyKind';
 import type { ProxySource } from './ProxySource';
 import { ProxyWatch } from './ProxyWatch';
@@ -30,14 +31,19 @@ export class SceneProxy implements Updatable {
   private static readonly CHECK_EVERY = 30;
   private static readonly QUIET_CHECKS = 3;
   private static readonly RESTLESS_DROPS = 2;
+  private static readonly RIGID = 'rigid';
+  private static readonly REFRESH_DELAY = 90;
 
   private readonly group = new Group();
-  private readonly keys = new ProxyKey();
-  private readonly builder = new ProxyBuilder(this.keys);
+  private readonly keys: ProxyKey;
+  private readonly builder: ProxyBuilder;
   private readonly cover = new ProxyCover();
   private readonly watch = new ProxyWatch();
   private readonly moving = new Set<Object3D>();
   private readonly drops = new Map<Mesh, number>();
+  private readonly moves = new Map<Mesh, number>();
+  private readonly restless = new Set<Mesh>();
+  private readonly rig = new ProxyRig();
   private readonly dropped = new Set<Mesh>();
   private readonly changed: Mesh[] = [];
   private readonly settledListeners: ((still: Object3D[]) => void)[] = [];
@@ -49,6 +55,7 @@ export class SceneProxy implements Updatable {
   private frame = 0;
   private quiet = 0;
   private stride = 1;
+  private refreshAt = 0;
 
   /**
    * Prepara la versión unida (sin armarla todavía).
@@ -62,6 +69,8 @@ export class SceneProxy implements Updatable {
     private readonly roots: readonly Object3D[],
     private readonly gate: RenderGate,
   ) {
+    this.keys = new ProxyKey(gate);
+    this.builder = new ProxyBuilder(this.keys);
     this.group.name = 'SceneProxy';
     this.group.matrixAutoUpdate = false;
     this.group.visible = false;
@@ -142,6 +151,10 @@ export class SceneProxy implements Updatable {
       batch.sync();
     });
     this.frame += 1;
+    if (this.refreshAt > 0 && this.frame >= this.refreshAt) {
+      this.refreshAt = 0;
+      this.refresh();
+    }
     if (this.quiet < SceneProxy.QUIET_CHECKS && this.frame % SceneProxy.CHECK_EVERY === 0) {
       this.settle();
     }
@@ -166,13 +179,49 @@ export class SceneProxy implements Updatable {
     const { sources, stride, changed } = this;
     for (let index = this.frame % stride; index < sources.length; index += stride) {
       const source = sources[index];
-      if (source && !this.dropped.has(source.mesh) && this.differs(source)) {
-        changed.push(source.mesh);
+      if (source && !this.dropped.has(source.mesh)) {
+        this.inspect(source);
       }
     }
     if (changed.length > 0) {
       this.drop(changed);
       changed.length = 0;
+    }
+  }
+
+  /**
+   * Revisa una malla copiada y, si cambió, la anota para sacarla del lote.
+   *
+   * @param source Malla con su estado copiado.
+   */
+  private inspect(source: ProxySource): void {
+    const change = this.change(source);
+    if (change !== null) {
+      this.count(source.mesh, change);
+      this.changed.push(source.mesh);
+    }
+  }
+
+  /**
+   * Cuenta los cambios de una malla. La que se mueve una y otra vez pasa a un lote articulado en el próximo
+   * rearmado (que se pide solo, al rato); la que cambia de material o de visibilidad una y otra vez, o se mueve
+   * con una escala que no se puede articular, queda original.
+   *
+   * @param mesh Malla.
+   * @param change Qué cambió.
+   */
+  private count(mesh: Mesh, change: 'moved' | 'changed'): void {
+    const tally = change === 'moved' ? this.moves : this.drops;
+    const times = (tally.get(mesh) ?? 0) + 1;
+    tally.set(mesh, times);
+    if (times < SceneProxy.RESTLESS_DROPS || this.restless.has(mesh)) {
+      return;
+    }
+    if (change === 'moved' && this.rig.fits(mesh)) {
+      this.restless.add(mesh);
+      this.refreshAt = this.frame + SceneProxy.REFRESH_DELAY;
+    } else {
+      this.moving.add(mesh);
     }
   }
 
@@ -197,18 +246,13 @@ export class SceneProxy implements Updatable {
 
   /**
    * Saca de los lotes (sin rearmarlos) mallas que cambiaron: se apagan sus vértices y vuelven a dibujarse como
-   * originales. La que cambia una y otra vez ya no vuelve a entrar.
+   * originales hasta el próximo rearmado.
    *
    * @param meshes Mallas que cambiaron.
    */
   private drop(meshes: readonly Mesh[]): void {
     this.cover.show();
     meshes.forEach((mesh) => {
-      const drops = (this.drops.get(mesh) ?? 0) + 1;
-      this.drops.set(mesh, drops);
-      if (drops >= SceneProxy.RESTLESS_DROPS) {
-        this.moving.add(mesh);
-      }
       this.dropped.add(mesh);
       this.batches.forEach((batch) => {
         batch.drop(mesh);
@@ -228,13 +272,13 @@ export class SceneProxy implements Updatable {
     });
     const previous = this.groups;
     this.groups = new Map();
-    this.collect().forEach(({ kind, meshes }, key) => {
+    this.collect().forEach(({ kind, meshes, rigid }, key) => {
       const old = previous.get(key);
       if (old && this.reusable(old, meshes)) {
         previous.delete(key);
         this.groups.set(key, old);
       } else if (meshes.length > 1) {
-        this.groups.set(key, this.builder.build(kind, meshes));
+        this.groups.set(key, this.builder.build(kind, meshes, rigid));
       }
     });
     previous.forEach((group) => {
@@ -267,7 +311,9 @@ export class SceneProxy implements Updatable {
   private reusable(group: ProxyGroup, meshes: readonly Mesh[]): boolean {
     const same =
       group.meshes.length === meshes.length && group.meshes.every((mesh, index) => mesh === meshes[index]);
-    return same && group.sources.every((source) => !this.dropped.has(source.mesh) && !this.differs(source));
+    return (
+      same && group.sources.every((source) => !this.dropped.has(source.mesh) && this.change(source) === null)
+    );
   }
 
   /**
@@ -275,8 +321,8 @@ export class SceneProxy implements Updatable {
    *
    * @returns Grupos.
    */
-  private collect(): Map<string, { kind: ProxyKind; meshes: Mesh[] }> {
-    const groups = new Map<string, { kind: ProxyKind; meshes: Mesh[] }>();
+  private collect(): Map<string, { kind: ProxyKind; meshes: Mesh[]; rigid: boolean }> {
+    const groups = new Map<string, { kind: ProxyKind; meshes: Mesh[]; rigid: boolean }>();
     const visit = (node: Object3D): void => {
       if (!node.visible || this.moving.has(node)) {
         return;
@@ -296,13 +342,14 @@ export class SceneProxy implements Updatable {
    * @param mesh Malla.
    * @param groups Grupos por clave.
    */
-  private sort(mesh: Mesh, groups: Map<string, { kind: ProxyKind; meshes: Mesh[] }>): void {
+  private sort(mesh: Mesh, groups: Map<string, { kind: ProxyKind; meshes: Mesh[]; rigid: boolean }>): void {
     const kind = this.keys.kind(mesh);
     if (!kind) {
       return;
     }
-    const key = this.keys.of(mesh, kind);
-    const group = groups.get(key) ?? { kind, meshes: [] };
+    const rigid = this.restless.has(mesh);
+    const key = rigid ? `${SceneProxy.RIGID}|${this.keys.of(mesh, kind)}` : this.keys.of(mesh, kind);
+    const group = groups.get(key) ?? { kind, meshes: [], rigid };
     group.meshes.push(mesh);
     groups.set(key, group);
   }
@@ -322,24 +369,38 @@ export class SceneProxy implements Updatable {
    * @returns `true` si hay cambios.
    */
   private hasChanges(): boolean {
-    return this.sources.some((source) => !this.dropped.has(source.mesh) && this.differs(source));
+    return this.sources.some((source) => !this.dropped.has(source.mesh) && this.change(source) !== null);
   }
 
   /**
-   * Si una malla original ya no está como cuando se copió.
+   * Qué cambió de una malla original desde que se copió: `'changed'` si cambió de material, de textura o de
+   * visibilidad, `'moved'` si solo se movió (en un lote articulado moverse no cuenta) y `null` si nada.
+   *
+   * @param source Malla con su estado copiado.
+   * @returns Qué cambió.
+   */
+  private change(source: ProxySource): 'moved' | 'changed' | null {
+    if (this.replaced(source)) {
+      return 'changed';
+    }
+    return !source.rigid && !source.mesh.matrixWorld.equals(source.matrix) ? 'moved' : null;
+  }
+
+  /**
+   * Si una malla original cambió de material, redibujó su textura o cambió de visibilidad (sin contar lo que
+   * ocultó la cubierta).
    *
    * @param source Malla con su estado copiado.
    * @returns `true` si cambió.
    */
-  private differs(source: ProxySource): boolean {
-    const { mesh, matrix, material, map, version, visible } = source;
+  private replaced(source: ProxySource): boolean {
+    const { mesh, material, map, version, visible } = source;
     const current = mesh.material as Material;
     const texture = ProxyBuilder.mapOf(current);
     if (current !== material || texture !== map || (texture?.version ?? 0) !== version) {
       return true;
     }
-    const hid = mesh.visible !== visible && !this.cover.hides(mesh);
-    return hid || !mesh.matrixWorld.equals(matrix);
+    return mesh.visible !== visible && !this.cover.hides(mesh);
   }
 
   /**

@@ -1,4 +1,4 @@
-import { CanvasTexture, NoColorSpace, RepeatWrapping, SRGBColorSpace } from 'three';
+import { CanvasTexture, NoColorSpace, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
 import type { SeededRandom } from '@shared/core/math/SeededRandom';
 
 /**
@@ -45,21 +45,27 @@ export class CanvasTextureFactory {
    * @param height Alto lógico del canvas.
    * @param paint Función que dibuja sobre el contexto.
    * @param scale Resolución del canvas; las texturas que se redibujan cada frame deben usar 1.
-   * @returns Textura en espacio de color sRGB.
+   * @param into Textura que se puede repintar en su lugar (una pantalla que se actualiza): si es de canvas y
+   * del mismo tamaño se reutiliza, así no se crea una textura nueva ni cambia el material que la usa.
+   * @returns Textura en espacio de color sRGB (la misma `into` si se reutilizó).
    */
   public paint(
     width: number,
     height: number,
     paint: (context: CanvasRenderingContext2D) => void,
     scale = this.supersample,
+    into: Texture | null = null,
   ): CanvasTexture {
-    const context = CanvasTextureFactory.context(width * scale, height * scale);
-    context.scale(scale, scale);
-    paint(context);
-    const texture = new CanvasTexture(context.canvas);
-    texture.colorSpace = SRGBColorSpace;
-    texture.anisotropy = this.anisotropy;
-    return texture;
+    const reused = CanvasTextureFactory.reusable(into, width * scale, height * scale);
+    const context = reused
+      ? CanvasTextureFactory.contextOf(reused.image)
+      : CanvasTextureFactory.context(width * scale, height * scale);
+    CanvasTextureFactory.draw(context, { width, height, scale }, paint);
+    if (reused) {
+      reused.needsUpdate = true;
+      return reused;
+    }
+    return this.wrap(context.canvas);
   }
 
   /**
@@ -282,6 +288,19 @@ export class CanvasTextureFactory {
   }
 
   /**
+   * Textura sRGB nueva sobre un canvas ya dibujado.
+   *
+   * @param canvas Canvas.
+   * @returns Textura.
+   */
+  private wrap(canvas: HTMLCanvasElement): CanvasTexture {
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    texture.anisotropy = this.anisotropy;
+    return texture;
+  }
+
+  /**
    * Surcos de la chapa: franjas con degradado claro en la cresta y oscuro en el valle.
    *
    * @param context Contexto de dibujo.
@@ -325,6 +344,57 @@ export class CanvasTextureFactory {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
+    return CanvasTextureFactory.contextOf(canvas);
+  }
+
+  /**
+   * Dibuja sobre un canvas (nuevo o reutilizado) con la escala pedida, desde un lienzo limpio y sin arrastrar
+   * el estado del dibujo anterior.
+   *
+   * @param context Contexto del canvas.
+   * @param size Medidas lógicas y escala.
+   * @param size.width Ancho lógico.
+   * @param size.height Alto lógico.
+   * @param size.scale Escala del canvas real.
+   * @param paint Función que dibuja.
+   */
+  private static draw(
+    context: CanvasRenderingContext2D,
+    size: { width: number; height: number; scale: number },
+    paint: (context: CanvasRenderingContext2D) => void,
+  ): void {
+    const { width, height, scale } = size;
+    context.save();
+    context.setTransform(scale, 0, 0, scale, 0, 0);
+    context.clearRect(0, 0, width, height);
+    paint(context);
+    context.restore();
+  }
+
+  /**
+   * Textura de canvas que se puede repintar en su lugar, si tiene el tamaño pedido.
+   *
+   * @param texture Textura candidata.
+   * @param width Ancho real del canvas.
+   * @param height Alto real del canvas.
+   * @returns La textura o `null`.
+   */
+  private static reusable(texture: Texture | null, width: number, height: number): CanvasTexture | null {
+    if (!(texture instanceof CanvasTexture) || !(texture.image instanceof HTMLCanvasElement)) {
+      return null;
+    }
+    const canvas = texture.image;
+    return canvas.width === width && canvas.height === height ? texture : null;
+  }
+
+  /**
+   * Contexto 2D de un canvas.
+   *
+   * @param canvas Canvas.
+   * @returns Contexto.
+   * @throws {Error} Si el navegador no da contexto 2D.
+   */
+  private static contextOf(canvas: HTMLCanvasElement): CanvasRenderingContext2D {
     const context = canvas.getContext('2d');
     if (!context) {
       throw new Error('Canvas 2D no disponible');

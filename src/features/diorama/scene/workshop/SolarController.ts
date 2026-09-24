@@ -203,7 +203,11 @@ export class SolarController extends SceneObject implements Updatable, Powerable
    */
   private redraw(): void {
     const old = this.screen.map;
-    this.screen.map = this.art();
+    const art = this.art(old);
+    if (art === old) {
+      return;
+    }
+    this.screen.map = art;
     old?.dispose();
     this.screen.needsUpdate = true;
   }
@@ -222,24 +226,41 @@ export class SolarController extends SceneObject implements Updatable, Powerable
   /**
    * Pantalla del controlador: fuente, estado de los paneles y barra de carga.
    *
+   * @param into Textura actual, que se repinta en su lugar si se puede.
    * @returns Textura de la pantalla.
    */
-  private art(): Texture {
+  private art(into: Texture | null): Texture {
+    const { width, height } = SolarController.ART;
+    return this.textures.paint(
+      width,
+      height,
+      (context) => {
+        this.paintScreen(context);
+      },
+      undefined,
+      into,
+    );
+  }
+
+  /**
+   * Dibuja la pantalla: estado de la red, carga y porcentaje de la batería.
+   *
+   * @param context Contexto del canvas.
+   */
+  private paintScreen(context: CanvasRenderingContext2D): void {
     const { width, height, margin } = SolarController.ART;
     const { back, text, warn } = SolarController.COLORS;
     const { size, title, bottom } = SolarController.TEXT;
     const grid = this.battery.onGrid;
     const ink = grid ? text : warn;
-    return this.textures.paint(width, height, (context) => {
-      context.fillStyle = back;
-      context.fillRect(0, 0, width, height);
-      context.fillStyle = ink;
-      context.font = `700 ${String(size)}px ${CanvasTextureFactory.MONO_FONT}`;
-      context.fillText(grid ? 'RED OK · PV 0 W' : 'SIN RED · INVERSOR', margin, title);
-      this.drawCharge(context, ink);
-      context.fillStyle = ink;
-      context.fillText(`BAT ${String(this.battery.percent)}%`, margin, bottom);
-    });
+    context.fillStyle = back;
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = ink;
+    context.font = `700 ${String(size)}px ${CanvasTextureFactory.MONO_FONT}`;
+    context.fillText(grid ? 'RED OK · PV 0 W' : 'SIN RED · INVERSOR', margin, title);
+    this.drawCharge(context, ink);
+    context.fillStyle = ink;
+    context.fillText(`BAT ${String(this.battery.percent)}%`, margin, bottom);
   }
 
   /**

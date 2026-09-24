@@ -94,7 +94,7 @@ export class BenchSupply {
     const text = `${String(on)}${amps.toFixed(BenchSupply.DECIMALS)}`;
     if (text !== this.shown) {
       this.shown = text;
-      this.replace(this.displays.supply(volts, amps, on));
+      this.replace(this.displays.supply(volts, amps, on, this.screen.map));
     }
     const { glow, off } = BenchSupply.SCREEN;
     this.screen.color.setScalar(Math.max(level * glow, off));
@@ -187,11 +187,14 @@ export class BenchSupply {
   }
 
   /**
-   * Cambia la textura del display y libera la anterior.
+   * Cambia la textura del display y libera la anterior (si se repintó la misma, no hace nada).
    *
    * @param texture Textura nueva.
    */
   private replace(texture: Texture): void {
+    if (texture === this.screen.map) {
+      return;
+    }
     this.screen.map?.dispose();
     this.screen.map = texture;
     this.screen.needsUpdate = true;

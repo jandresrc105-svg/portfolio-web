@@ -57,6 +57,7 @@ export class Stage {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.camera.layers.enable(RenderLayer.Background);
     this.scene.matrixWorldAutoUpdate = false;
+    this.scene.matrixAutoUpdate = false;
     this.stats = new FrameStats(this.renderer);
     const sort = new ProgramSort();
     this.renderer.setOpaqueSort(sort.compare.bind(sort));
@@ -133,7 +134,9 @@ export class Stage {
 
   /**
    * Dibuja un frame. Las matrices de la escena se actualizan una sola vez aquí: three.js las recalcularía en
-   * cada `render` (la cámara y el espejo de los charcos), recorriendo todo el árbol dos veces por frame.
+   * cada `render` (la cámara y el espejo de los charcos), recorriendo todo el árbol dos veces por frame. La
+   * escena no recompone su propia matriz (no se mueve): si lo hiciera, obligaría a recalcular la matriz de
+   * todos los objetos en cada frame; así solo se recalcula lo que cambió y lo que cuelga de ello.
    */
   public render(): void {
     this.scene.updateMatrixWorld();

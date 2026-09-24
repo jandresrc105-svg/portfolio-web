@@ -10,42 +10,56 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ProxyAtlas } from './ProxyAtlas';
 import type { ProxyEntry } from './ProxyEntry';
 import type { ProxyKind } from './ProxyKind';
+import { ProxyRig } from './ProxyRig';
 import { ProxyShader } from './ProxyShader';
 
 /**
  * Un lote de la versión unida de una zona: las mallas originales que comparten clave, llevadas a su posición
  * en el mundo y unidas en una sola malla. Cada material original tiene sus rangos de vértices; en cada
  * {@link ProxyBatch.sync} se comparan sus valores actuales (color, brillo, rugosidad, metal) con los copiados y,
- * si alguno cambió (un LED que parpadea, una luz que se enciende), se reescriben solo esos vértices.
+ * si alguno cambió (un LED que parpadea, una luz que se enciende), se reescriben solo esos vértices. Un lote
+ * articulado ({@link ProxyRig}) deja cada malla en su propio espacio y la mueve con su matriz actual.
  */
 export class ProxyBatch {
   private static readonly LIT_STRIDE = 8;
   private static readonly BASIC_STRIDE = 3;
   private static readonly RGB = 3;
   private static readonly PAIR = 2;
+  private static readonly TRIANGLE = 3;
+  private static readonly RIG = new ProxyRig();
 
   public readonly mesh: Mesh;
 
   private readonly entries: ProxyEntry[];
   private readonly ranges = new Map<Mesh, { start: number; count: number }>();
   private readonly current: Float32Array;
+  private readonly atlas: ProxyAtlas | null;
+  private readonly rigid: boolean;
 
   /**
    * Arma el lote.
    *
    * @param kind Tipo de lote.
    * @param sources Mallas originales (misma clave), con sus matrices del mundo al día.
-   * @param atlas Atlas con las texturas de color de las mallas (si las tienen distintas), o `null`.
+   * @param options Opciones del lote.
+   * @param options.atlas Atlas con las texturas de color de las mallas (si las tienen distintas), o `null`.
+   * @param options.layers Capas del lote (las de sus mallas: la cámara y, si brillan, el reflejo).
+   * @param options.rigid Si es articulado (sus mallas se mueven y cada una es un hueso).
    */
   public constructor(
     private readonly kind: ProxyKind,
     sources: readonly Mesh[],
-    private readonly atlas: ProxyAtlas | null = null,
+    options: { atlas: ProxyAtlas | null; layers: number; rigid: boolean },
   ) {
+    this.atlas = options.atlas;
+    this.rigid = options.rigid;
     this.current = new Float32Array(kind === 'lit' ? ProxyBatch.LIT_STRIDE : ProxyBatch.BASIC_STRIDE);
     this.entries = ProxyBatch.group(sources, this.current.length);
     this.index(sources);
-    this.mesh = new Mesh(this.geometry(sources), this.material(sources));
+    const geometry = this.geometry(sources);
+    const material = this.material(sources);
+    this.mesh = this.rigid ? ProxyBatch.RIG.mesh(geometry, material, sources) : new Mesh(geometry, material);
+    this.mesh.layers.mask = options.layers;
     this.mesh.matrixAutoUpdate = false;
     this.mesh.matrixWorldAutoUpdate = false;
     this.sync(true);
@@ -116,7 +130,7 @@ export class ProxyBatch {
    * @throws {Error} Si las geometrías no se pueden unir (atributos incompatibles).
    */
   private geometry(sources: readonly Mesh[]): BufferGeometry {
-    const parts = sources.map((mesh) => this.part(mesh));
+    const parts = sources.map((mesh, bone) => this.part(mesh, bone));
     const merged = mergeGeometries(parts) as BufferGeometry | null;
     parts.forEach((part) => {
       part.dispose();
@@ -128,13 +142,15 @@ export class ProxyBatch {
   }
 
   /**
-   * Copia de la geometría de una malla en el mundo, con los atributos por vértice (vacíos) del lote.
+   * Copia de la geometría de una malla en el mundo (o en su espacio, atada a su hueso, si el lote es
+   * articulado), con los atributos por vértice (vacíos) del lote.
    *
    * @param mesh Malla original.
+   * @param bone Posición de la malla en el lote (su hueso, si es articulado).
    * @returns Geometría lista para unir.
    */
-  private part(mesh: Mesh): BufferGeometry {
-    const part = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+  private part(mesh: Mesh, bone: number): BufferGeometry {
+    const part = this.place(mesh, bone);
     const count = part.getAttribute('position').count;
     const attribute = (size: number): BufferAttribute =>
       new BufferAttribute(new Float32Array(count * size), size);
@@ -144,6 +160,27 @@ export class ProxyBatch {
     if (this.kind === 'lit') {
       part.setAttribute('proxyEmissive', attribute(ProxyBatch.RGB));
       part.setAttribute('proxyRoughMetal', attribute(ProxyBatch.PAIR));
+    }
+    return part;
+  }
+
+  /**
+   * Copia la geometría de una malla en el espacio del lote: el mundo, o el de la malla atada a su hueso si el
+   * lote es articulado. Si la malla está espejada invierte sus triángulos.
+   *
+   * @param mesh Malla original.
+   * @param bone Posición de la malla en el lote.
+   * @returns Copia de la geometría.
+   */
+  private place(mesh: Mesh, bone: number): BufferGeometry {
+    const part = mesh.geometry.clone();
+    if (this.rigid) {
+      ProxyBatch.RIG.attach(part, bone);
+    } else {
+      part.applyMatrix4(mesh.matrixWorld);
+    }
+    if (mesh.matrixWorld.determinant() < 0) {
+      ProxyBatch.flip(part);
     }
     return part;
   }
@@ -239,6 +276,43 @@ export class ProxyBatch {
       (material as MeshBasicMaterial).map = this.atlas.texture;
     }
     return material;
+  }
+
+  /**
+   * Invierte el orden de los vértices de cada triángulo de una geometría que se copió con una matriz espejada:
+   * sin esto el frente y el dorso quedarían cambiados.
+   *
+   * @param geometry Geometría ya en el mundo.
+   */
+  private static flip(geometry: BufferGeometry): void {
+    const index = geometry.index;
+    if (index) {
+      const array = index.array;
+      for (let corner = 0; corner + 2 < array.length; corner += ProxyBatch.TRIANGLE) {
+        const second = array[corner + 1] ?? 0;
+        array[corner + 1] = array[corner + 2] ?? 0;
+        array[corner + 2] = second;
+      }
+      return;
+    }
+    Object.values(geometry.attributes).forEach((attribute) => {
+      ProxyBatch.swapCorners(attribute as BufferAttribute);
+    });
+  }
+
+  /**
+   * Cambia de lugar el segundo y el tercer vértice de cada triángulo en un atributo sin índice.
+   *
+   * @param attribute Atributo.
+   */
+  private static swapCorners(attribute: BufferAttribute): void {
+    const size = attribute.itemSize;
+    const array = attribute.array;
+    for (let vertex = 0; vertex + 2 < attribute.count; vertex += ProxyBatch.TRIANGLE) {
+      const second = array.slice((vertex + 1) * size, (vertex + 2) * size);
+      array.copyWithin((vertex + 1) * size, (vertex + 2) * size, (vertex + 3) * size);
+      array.set(second, (vertex + 2) * size);
+    }
   }
 
   /**

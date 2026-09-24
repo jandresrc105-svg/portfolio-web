@@ -1,4 +1,4 @@
-import type { CanvasTexture } from 'three';
+import type { CanvasTexture, Texture } from 'three';
 import { CanvasTextureFactory } from '../CanvasTextureFactory';
 
 /**
@@ -51,9 +51,10 @@ export class BenchDisplays {
    * @param volts Voltaje.
    * @param amps Corriente.
    * @param on Si la fuente está encendida.
+   * @param into Textura actual del display, que se repinta en su lugar si se puede.
    * @returns Textura.
    */
-  public supply(volts: number, amps: number, on: boolean): CanvasTexture {
+  public supply(volts: number, amps: number, on: boolean, into: Texture | null = null): CanvasTexture {
     const { width, height, background, volts: red, amps: green, ghost } = BenchDisplays.SUPPLY;
     const { DECIMALS, LINES } = BenchDisplays;
     return this.textures.paint(
@@ -70,6 +71,7 @@ export class BenchDisplays {
         BenchDisplays.readout(context, current, on ? green : ghost);
       },
       1,
+      into,
     );
   }
 
@@ -78,26 +80,19 @@ export class BenchDisplays {
    *
    * @param volts Voltaje medido.
    * @param on Si hay tensión que medir.
+   * @param into Textura actual del display, que se repinta en su lugar si se puede.
    * @returns Textura.
    */
-  public meter(volts: number, on: boolean): CanvasTexture {
-    const { width, height, lit, dark, ink, size, unit } = BenchDisplays.METER;
-    const pad = BenchDisplays.PAD;
+  public meter(volts: number, on: boolean, into: Texture | null = null): CanvasTexture {
+    const { width, height } = BenchDisplays.METER;
     return this.textures.paint(
       width,
       height,
       (context) => {
-        context.fillStyle = on ? lit : dark;
-        context.fillRect(0, 0, width, height);
-        context.fillStyle = ink;
-        context.textBaseline = 'middle';
-        context.textAlign = 'right';
-        context.font = `700 ${String(size)}px ${CanvasTextureFactory.MONO_FONT}`;
-        context.fillText(volts.toFixed(BenchDisplays.DECIMALS.volts), width - pad * 3, height / 2);
-        context.font = `700 ${String(unit)}px ${CanvasTextureFactory.MONO_FONT}`;
-        context.fillText('VDC', width - pad / 2, height / 2);
+        BenchDisplays.drawMeter(context, volts, on);
       },
       1,
+      into,
     );
   }
 
@@ -141,5 +136,26 @@ export class BenchDisplays {
     context.fillText(line.text, width - pad * 3, line.y);
     context.font = `700 ${String(unit)}px ${CanvasTextureFactory.MONO_FONT}`;
     context.fillText(line.unit, width - pad, line.y);
+  }
+
+  /**
+   * Dibuja la lectura del multímetro.
+   *
+   * @param context Contexto del canvas.
+   * @param volts Tensión medida.
+   * @param on Si hay tensión que medir.
+   */
+  private static drawMeter(context: CanvasRenderingContext2D, volts: number, on: boolean): void {
+    const { width, height, lit, dark, ink, size, unit } = BenchDisplays.METER;
+    const pad = BenchDisplays.PAD;
+    context.fillStyle = on ? lit : dark;
+    context.fillRect(0, 0, width, height);
+    context.fillStyle = ink;
+    context.textBaseline = 'middle';
+    context.textAlign = 'right';
+    context.font = `700 ${String(size)}px ${CanvasTextureFactory.MONO_FONT}`;
+    context.fillText(volts.toFixed(BenchDisplays.DECIMALS.volts), width - pad * 3, height / 2);
+    context.font = `700 ${String(unit)}px ${CanvasTextureFactory.MONO_FONT}`;
+    context.fillText('VDC', width - pad / 2, height / 2);
   }
 }

@@ -138,9 +138,7 @@ export class BenchGear {
     const text = volts.toFixed(BenchGear.DECIMALS);
     if (text !== this.shown) {
       this.shown = text;
-      this.lcd.map?.dispose();
-      this.lcd.map = this.displays.meter(volts, volts > 0);
-      this.lcd.needsUpdate = true;
+      this.show(this.displays.meter(volts, volts > 0, this.lcd.map));
     }
     const { rate, duty } = BenchGear.BLINK;
     const on = volts > 0 && (elapsed * rate) % 1 < duty;
@@ -157,6 +155,19 @@ export class BenchGear {
    */
   public dispose(): void {
     this.lcd.map?.dispose();
+  }
+  /**
+   * Pone una textura en el display del multímetro (si se repintó la misma, no hace nada).
+   *
+   * @param texture Textura.
+   */
+  private show(texture: Texture): void {
+    if (texture === this.lcd.map) {
+      return;
+    }
+    this.lcd.map?.dispose();
+    this.lcd.map = texture;
+    this.lcd.needsUpdate = true;
   }
 
   /**

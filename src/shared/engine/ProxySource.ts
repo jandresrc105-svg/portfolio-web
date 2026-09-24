@@ -16,4 +16,6 @@ export interface ProxySource {
   readonly version: number;
   /** Visibilidad al copiarla. */
   readonly visible: boolean;
+  /** Si está en un lote articulado (moverse no la saca del lote). */
+  readonly rigid: boolean;
 }

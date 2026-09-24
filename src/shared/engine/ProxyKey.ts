@@ -12,6 +12,7 @@ import {
 } from 'three';
 import { RenderLayer } from './RenderLayer';
 import type { ProxyKind } from './ProxyKind';
+import type { RenderGate } from './RenderGate';
 
 /**
  * Decide qué mallas pueden entrar en la versión unida de una zona y con qué otras comparten lote. Entran las
@@ -21,11 +22,28 @@ import type { ProxyKind } from './ProxyKind';
  * copia el lote por vértice en cada frame.
  */
 export class ProxyKey {
-  private static readonly OWN_LAYERS = (1 << RenderLayer.Default) | (1 << RenderLayer.Gated);
+  private static readonly OWN_LAYERS = (1 << RenderLayer.Default) | (1 << RenderLayer.Reflected);
   private static readonly RESERVED = ['color', 'proxyEmissive', 'proxyRoughMetal', 'proxyVisible'];
   private static readonly PHYSICAL = 'MeshPhysicalMaterial';
 
   private readonly inside = new WeakMap<BufferGeometry, boolean>();
+
+  /**
+   * Prepara la clasificación.
+   *
+   * @param gate Compuerta del render (sabe las capas de lo que ya sacó).
+   */
+  public constructor(private readonly gate: RenderGate) {}
+
+  /**
+   * Capas del lote de una malla: las que tiene fuera de la compuerta (la cámara y, si brilla, el reflejo).
+   *
+   * @param mesh Malla.
+   * @returns Máscara de capas.
+   */
+  public layersOf(mesh: Mesh): number {
+    return this.gate.layersOf(mesh);
+  }
 
   /**
    * Tipo de lote de una malla, o `null` si debe quedarse como está.
@@ -76,7 +94,8 @@ export class ProxyKey {
       )
       .sort();
     const shape = [attributes.join(','), geometry.index ? 'i' : 'n'];
-    const common = [material.side, material.depthTest, material.depthWrite, material.polygonOffset];
+    const { side, depthTest, depthWrite, polygonOffset } = material;
+    const common = [side, depthTest, depthWrite, polygonOffset, this.layersOf(mesh)];
     const atlas = this.atlased(mesh);
     const extra =
       material instanceof MeshStandardMaterial ? this.lit(material, atlas) : this.basic(material, atlas);
@@ -111,15 +130,16 @@ export class ProxyKey {
   }
 
   /**
-   * Colocada de forma simple: sin espejo y solo en la capa de la cámara (lo que se refleja en los charcos
-   * queda aparte).
+   * Colocada de forma simple: en la capa de la cámara (y, si brilla, en la del reflejo: esas van en lotes
+   * aparte) y con una matriz que no la aplaste. Las espejadas sirven: el lote invierte sus triángulos.
    *
    * @param mesh Malla.
    * @returns `true` si se puede llevar al mundo sin cambiar su aspecto.
    */
   private placed(mesh: Mesh): boolean {
-    const extraLayers = (mesh.layers.mask & ~ProxyKey.OWN_LAYERS) !== 0;
-    return !extraLayers && mesh.matrixWorld.determinant() > 0;
+    const mask = this.layersOf(mesh);
+    const extraLayers = (mask & ~ProxyKey.OWN_LAYERS) !== 0;
+    return !extraLayers && (mask & (1 << RenderLayer.Default)) !== 0 && mesh.matrixWorld.determinant() !== 0;
   }
 
   /**

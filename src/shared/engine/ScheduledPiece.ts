@@ -1,11 +1,13 @@
-import { Box3, Sphere, type Object3D } from 'three';
+import { Box3, Quaternion, Sphere, Vector3, type Object3D } from 'three';
 import type { DetailAware } from './DetailAware';
 import type { Updatable } from './Updatable';
 
 /**
  * Pieza animada que el {@link UpdateScheduler} actualiza a pedido: a ritmo completo, a ritmo reducido o
  * congelada en su último cuadro. Guarda el tiempo que dejó de recibir para no dar saltos al volver y apaga el
- * recálculo de matrices de su árbol mientras no se actualiza en cada frame.
+ * recálculo de matrices de su árbol mientras no se actualiza en cada frame. La matriz de la raíz solo se
+ * recompone si la raíz se movió: así no arrastra a recalcular todo el árbol (las partes fijas se saltan y solo
+ * se recalcula lo que se anima).
  */
 export class ScheduledPiece {
   private static readonly MAX_DELTA = 0.05;
@@ -15,6 +17,7 @@ export class ScheduledPiece {
   private pending = 0;
   private detailed: boolean | null = null;
   private held = false;
+  private readonly pose = { position: new Vector3(), quaternion: new Quaternion(), scale: new Vector3() };
 
   /**
    * Prepara la pieza.
@@ -25,7 +28,10 @@ export class ScheduledPiece {
   public constructor(
     private readonly updatable: Updatable,
     private readonly root: Object3D,
-  ) {}
+  ) {
+    root.matrixAutoUpdate = false;
+    this.track(true);
+  }
 
   /**
    * Esfera que envuelve la pieza en el mundo (se calcula una vez, la primera vez que se pide). Una pieza sin
@@ -87,6 +93,7 @@ export class ScheduledPiece {
     this.root.matrixWorldAutoUpdate = !this.held;
     this.updatable.update(Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
+    this.track();
   }
 
   /**
@@ -104,8 +111,9 @@ export class ScheduledPiece {
     }
     this.updatable.update(Math.min(this.pending, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
+    this.track();
     if (!this.held) {
-      this.root.updateMatrixWorld(true);
+      this.root.updateMatrixWorld();
     }
   }
 
@@ -117,5 +125,24 @@ export class ScheduledPiece {
   public hold(delta: number): void {
     this.root.matrixWorldAutoUpdate = false;
     this.pending = Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA);
+  }
+
+  /**
+   * Recompone la matriz de la raíz si se movió, rotó o cambió de escala desde la última vez.
+   *
+   * @param force Recomponer aunque no haya cambiado.
+   */
+  private track(force = false): void {
+    const { position, quaternion, scale } = this.root;
+    const pose = this.pose;
+    const still =
+      pose.position.equals(position) && pose.quaternion.equals(quaternion) && pose.scale.equals(scale);
+    if (still && !force) {
+      return;
+    }
+    pose.position.copy(position);
+    pose.quaternion.copy(quaternion);
+    pose.scale.copy(scale);
+    this.root.updateMatrix();
   }
 }
