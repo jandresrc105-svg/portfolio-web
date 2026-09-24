@@ -1,5 +1,6 @@
 import { Box3, Sphere, type Object3D } from 'three';
 import type { DetailAware } from './DetailAware';
+import type { PieceGroup } from './PieceGroup';
 import type { Updatable } from './Updatable';
 
 /**
@@ -24,7 +25,7 @@ export class ScheduledPiece {
    */
   public constructor(
     private readonly updatable: Updatable,
-    private readonly root: Object3D,
+    private readonly root: PieceGroup,
   ) {}
 
   /**
@@ -84,7 +85,7 @@ export class ScheduledPiece {
    * @param elapsed Segundos desde el inicio.
    */
   public run(delta: number, elapsed: number): void {
-    this.root.matrixWorldAutoUpdate = !this.held;
+    this.root.paused = this.held;
     this.updatable.update(Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
   }
@@ -97,7 +98,7 @@ export class ScheduledPiece {
    * @param step Segundos entre actualizaciones.
    */
   public throttle(delta: number, elapsed: number, step: number): void {
-    this.root.matrixWorldAutoUpdate = false;
+    this.root.paused = true;
     this.pending += delta;
     if (this.pending < step) {
       return;
@@ -105,7 +106,7 @@ export class ScheduledPiece {
     this.updatable.update(Math.min(this.pending, ScheduledPiece.MAX_DELTA), elapsed);
     this.pending = 0;
     if (!this.held) {
-      this.root.updateMatrixWorld();
+      this.root.refreshMatrices();
     }
   }
 
@@ -115,7 +116,7 @@ export class ScheduledPiece {
    * @param delta Segundos desde el frame anterior.
    */
   public hold(delta: number): void {
-    this.root.matrixWorldAutoUpdate = false;
+    this.root.paused = true;
     this.pending = Math.min(this.pending + delta, ScheduledPiece.MAX_DELTA);
   }
 }

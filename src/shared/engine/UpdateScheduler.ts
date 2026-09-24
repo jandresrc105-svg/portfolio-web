@@ -1,4 +1,5 @@
 import { Frustum, MathUtils, Matrix4, type Object3D, type PerspectiveCamera } from 'three';
+import type { PieceGroup } from './PieceGroup';
 import { ScheduledPiece } from './ScheduledPiece';
 import type { Updatable } from './Updatable';
 
@@ -34,7 +35,7 @@ export class UpdateScheduler implements Updatable {
    * @param updatable Lógica de la pieza.
    * @param root Raíz 3D de la pieza (ya en la escena).
    */
-  public track(updatable: Updatable, root: Object3D): void {
+  public track(updatable: Updatable, root: PieceGroup): void {
     this.pieces.push(new ScheduledPiece(updatable, root));
   }
 

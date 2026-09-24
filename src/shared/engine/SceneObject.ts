@@ -1,4 +1,5 @@
-import { Group, Mesh, Points, LineSegments, type Material, type Object3D, type Vector3Like } from 'three';
+import { Mesh, Points, LineSegments, type Material, type Object3D, type Vector3Like } from 'three';
+import { PieceGroup } from './PieceGroup';
 import { GeometryBatcher } from './GeometryBatcher';
 
 /**
@@ -9,7 +10,7 @@ import { GeometryBatcher } from './GeometryBatcher';
  *   recalcular sus matrices en cada frame.
  */
 export abstract class SceneObject {
-  public readonly root = new Group();
+  public readonly root = new PieceGroup();
 
   private readonly resources: { dispose: () => void }[] = [];
 
@@ -18,7 +19,7 @@ export abstract class SceneObject {
    *
    * @returns Grupo raíz del objeto.
    */
-  public create(): Group {
+  public create(): PieceGroup {
     this.build();
     this.root.name = this.constructor.name;
     return this.root;
@@ -39,6 +40,7 @@ export abstract class SceneObject {
       child.matrixAutoUpdate = false;
       child.matrixWorldAutoUpdate = false;
     });
+    this.root.paused = true;
     return saved;
   }
 
