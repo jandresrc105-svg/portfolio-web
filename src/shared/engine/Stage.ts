@@ -1,4 +1,5 @@
 import {
+  HalfFloatType,
   Mesh,
   PerspectiveCamera,
   PMREMGenerator,
@@ -7,8 +8,9 @@ import {
   SRGBColorSpace,
   Texture,
   WebGLRenderer,
+  WebGLRenderTarget,
   type Material,
-  type WebGLRenderTarget,
+  type Object3D,
 } from 'three';
 import { FrameStats } from './FrameStats';
 import { PoseCheck } from './PoseCheck';
@@ -33,6 +35,7 @@ export class Stage {
   public readonly stats: FrameStats;
 
   private readonly post: PostProcessing;
+  private readonly compileTarget = new WebGLRenderTarget(1, 1, { type: HalfFloatType });
   private size = { width: 1, height: 1 };
   private resolutionScale = 1;
   private environment: WebGLRenderTarget | null = null;
@@ -122,13 +125,44 @@ export class Stage {
    * @returns Promesa que se resuelve cuando la compilación termina.
    */
   public async warmUp(): Promise<void> {
-    await this.renderer.compileAsync(this.scene, this.camera);
+    await this.compile();
     this.scene.traverse((object) => {
       if (object instanceof Mesh || object instanceof Points) {
         Stage.textures(object.material as Material | Material[]).forEach((texture) => {
           this.renderer.initTexture(texture);
         });
       }
+    });
+  }
+
+  /**
+   * Compila los shaders de unos objetos con las luces actuales de la escena, tal como se van a dibujar: dentro
+   * de un buffer intermedio (el del post-procesado o el del espejo), no directo a la pantalla. three.js elige la
+   * variante de cada shader según el destino (la pantalla convierte a sRGB; un buffer queda lineal), así que
+   * compilar para la pantalla daría variantes que nunca se usan y el shader real se compilaría al verse por
+   * primera vez, con un tirón de cientos de milisegundos. La parte que decide y crea los programas es
+   * síncrona; la promesa solo espera a que el driver termine de enlazarlos.
+   *
+   * @param root Raíz de los objetos a compilar (por defecto, toda la escena).
+   * @returns Promesa que se resuelve cuando los programas están listos.
+   */
+  public compile(root: Object3D = this.scene): Promise<void> {
+    const previous = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.compileTarget);
+    const done = this.renderer.compileAsync(root, this.camera, this.scene).then(() => undefined);
+    this.renderer.setRenderTarget(previous);
+    return done;
+  }
+
+  /**
+   * Termina de preparar los programas ya compilados. En algunos drivers (ANGLE sobre Direct3D, el de Chrome en
+   * Windows) el enlace se completa recién cuando three.js consulta el programa la primera vez, y esa consulta
+   * espera 15–30 ms por programa: hecha al dibujar, cada parada nueva se trababa al llegar. Consultarlos todos
+   * durante la carga paga ese costo antes de mostrar la escena.
+   */
+  public settlePrograms(): void {
+    this.renderer.info.programs?.forEach((program) => {
+      program.getUniforms();
     });
   }
 
@@ -161,6 +195,7 @@ export class Stage {
    */
   public dispose(): void {
     this.environment?.dispose();
+    this.compileTarget.dispose();
     this.post.dispose();
     this.renderer.dispose();
   }

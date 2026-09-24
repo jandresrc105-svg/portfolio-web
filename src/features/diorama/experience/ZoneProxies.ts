@@ -58,6 +58,25 @@ export class ZoneProxies implements Updatable {
   }
 
   /**
+   * Avisa cada vez que alguna zona arma lotes nuevos (para preparar sus shaders antes de dibujarlos).
+   *
+   * @param listener Recibe las mallas de los lotes nuevos.
+   */
+  public onBuilt(listener: (meshes: readonly Object3D[]) => void): void {
+    this.workshop.onBuilt(listener);
+    this.street.onBuilt(listener);
+  }
+
+  /**
+   * Copias articuladas de los lotes de las dos zonas, para precompilar esa variante de sus shaders.
+   *
+   * @returns Mallas articuladas (no se agregan a la escena).
+   */
+  public rigVariants(): Object3D[] {
+    return [...this.workshop.rigVariants(), ...this.street.rigVariants()];
+  }
+
+  /**
    * @inheritdoc
    */
   public update(): void {

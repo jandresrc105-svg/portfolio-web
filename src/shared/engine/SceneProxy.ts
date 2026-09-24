@@ -1,4 +1,4 @@
-import { Group, Mesh, type Material, type Object3D, type Scene } from 'three';
+import { Group, Mesh, SkinnedMesh, type Material, type Object3D, type Scene } from 'three';
 import type { ProxyBatch } from './ProxyBatch';
 import { ProxyBuilder } from './ProxyBuilder';
 import { ProxyCover } from './ProxyCover';
@@ -46,7 +46,9 @@ export class SceneProxy implements Updatable {
   private readonly rig = new ProxyRig();
   private readonly dropped = new Set<Mesh>();
   private readonly changed: Mesh[] = [];
+  private readonly share = { every: 1, turn: 0 };
   private readonly settledListeners: ((still: Object3D[]) => void)[] = [];
+  private readonly builtListeners: ((meshes: readonly Object3D[]) => void)[] = [];
   private groups = new Map<string, ProxyGroup>();
   private sources: ProxySource[] = [];
   private batches: ProxyBatch[] = [];
@@ -85,6 +87,28 @@ export class SceneProxy implements Updatable {
    */
   public onSettled(listener: (still: Object3D[]) => void): void {
     this.settledListeners.push(listener);
+  }
+
+  /**
+   * Avisa cada vez que se arman lotes nuevos (con sus mallas), antes de liberar los que reemplazan.
+   *
+   * @param listener Recibe las mallas de los lotes nuevos.
+   */
+  public onBuilt(listener: (meshes: readonly Object3D[]) => void): void {
+    this.builtListeners.push(listener);
+  }
+
+  /**
+   * Copias articuladas (sin dibujar) de los lotes actuales, para compilar de antemano la variante con
+   * skinning de sus shaders: lo que se mueve una y otra vez pasa después a un lote articulado con materiales
+   * iguales, y compilar esa variante recién entonces trababa la animación unos 200 ms.
+   *
+   * @returns Mallas articuladas que comparten geometría y material con los lotes.
+   */
+  public rigVariants(): Object3D[] {
+    return this.batches
+      .filter((batch) => !(batch.mesh instanceof SkinnedMesh))
+      .map((batch) => new SkinnedMesh(batch.mesh.geometry, batch.mesh.material));
   }
 
   /**
@@ -147,10 +171,12 @@ export class SceneProxy implements Updatable {
       return;
     }
     this.detect();
-    const share = { every: this.stride, turn: this.frame };
-    this.batches.forEach((batch) => {
+    const share = this.share;
+    share.every = this.stride;
+    share.turn = this.frame;
+    for (const batch of this.batches) {
       batch.sync(false, share);
-    });
+    }
     this.frame += 1;
     if (this.refreshAt > 0 && this.frame >= this.refreshAt) {
       this.refreshAt = 0;
@@ -273,19 +299,51 @@ export class SceneProxy implements Updatable {
     });
     const previous = this.groups;
     this.groups = new Map();
+    const built = this.regroup(previous);
+    this.mount();
+    this.announce(built);
+    previous.forEach((group) => {
+      SceneProxy.release(group);
+    });
+  }
+
+  /**
+   * Arma los grupos vigentes: reutiliza los que no cambiaron (y los saca de `previous`) y arma los demás.
+   *
+   * @param previous Grupos anteriores; al terminar quedan solo los que hay que liberar.
+   * @returns Grupos armados de nuevo.
+   */
+  private regroup(previous: Map<string, ProxyGroup>): ProxyGroup[] {
+    const built: ProxyGroup[] = [];
     this.collect().forEach(({ kind, meshes, rigid }, key) => {
       const old = previous.get(key);
       if (old && this.reusable(old, meshes)) {
         previous.delete(key);
         this.groups.set(key, old);
       } else if (meshes.length > 1) {
-        this.groups.set(key, this.builder.build(kind, meshes, rigid));
+        const group = this.builder.build(kind, meshes, rigid);
+        this.groups.set(key, group);
+        built.push(group);
       }
     });
-    previous.forEach((group) => {
-      SceneProxy.release(group);
+    return built;
+  }
+
+  /**
+   * Avisa los lotes recién armados. Va antes de liberar los viejos: si sus shaders se preparan mientras los
+   * materiales viejos (con la misma clave) siguen vivos, three.js reutiliza los programas en vez de borrarlos y
+   * volver a compilarlos al dibujar.
+   *
+   * @param built Grupos nuevos.
+   */
+  private announce(built: readonly ProxyGroup[]): void {
+    const meshes = built.flatMap((group) => group.batches.map((batch) => batch.mesh));
+    if (meshes.length === 0) {
+      return;
+    }
+    this.builtListeners.forEach((listener) => {
+      listener(meshes);
     });
-    this.mount();
   }
 
   /**

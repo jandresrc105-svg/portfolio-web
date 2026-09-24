@@ -19,11 +19,14 @@ import type { Updatable } from './Updatable';
  * se aplica a superficies iluminadas sin brillo propio: lo que emite luz (LEDs, pantallas, neones) se queda,
  * porque aunque sea un punto el bloom lo hace visible. Se saca de la capa de la cámara con la {@link RenderGate}
  * en vez de ocultarla, así no pisa la visibilidad que maneja cada pieza. Una malla unida ({@link GeometryBatcher}) se mide
- * por su parte más grande, así desde lejos desaparece igual que sus partes sueltas.
+ * por su parte más grande, así desde lejos desaparece igual que sus partes sueltas. La revisión se reparte:
+ * cada frame mide una parte de las mallas (un tercio con la cámara en movimiento, un sexto quieta), así
+ * arrastrar la cámara no cuesta una pasada completa por frame; un detalle de un píxel que aparece dos frames
+ * tarde no se nota.
  */
 export class DetailCuller implements Updatable {
   private static readonly MIN_PIXELS = 1.2;
-  private static readonly EVERY = 6;
+  private static readonly SLICES = { moving: 3, still: 6 };
   private static readonly MOVED = 0.01;
   private static readonly REASON = 'tiny';
 
@@ -31,7 +34,7 @@ export class DetailCuller implements Updatable {
   private readonly world = new Vector3();
   private readonly lastPosition = new Vector3(Infinity, Infinity, Infinity);
   private halfHeight = 1;
-  private frame = 0;
+  private cursor = 0;
 
   /**
    * Crea el descarte.
@@ -76,16 +79,20 @@ export class DetailCuller implements Updatable {
    * @inheritdoc
    */
   public update(): void {
-    this.frame += 1;
     const moved = this.camera.position.distanceToSquared(this.lastPosition) > DetailCuller.MOVED ** 2;
-    if (!moved && this.frame % DetailCuller.EVERY !== 0) {
-      return;
+    if (moved) {
+      this.lastPosition.copy(this.camera.position);
     }
-    this.lastPosition.copy(this.camera.position);
+    const { meshes } = this;
+    const slices = moved ? DetailCuller.SLICES.moving : DetailCuller.SLICES.still;
     const scale = this.halfHeight / Math.tan(MathUtils.degToRad(this.camera.fov) / 2);
-    this.meshes.forEach((entry) => {
-      this.evaluate(entry, scale);
-    });
+    for (let checked = Math.ceil(meshes.length / slices); checked > 0; checked -= 1) {
+      this.cursor = (this.cursor + 1) % meshes.length;
+      const entry = meshes[this.cursor];
+      if (entry) {
+        this.evaluate(entry, scale);
+      }
+    }
   }
 
   /**

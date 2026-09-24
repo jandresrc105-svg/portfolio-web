@@ -37,7 +37,8 @@ export class AdaptiveResolution implements Updatable {
    *
    * @param stage Escenario cuya resolución se ajusta.
    * @param quality Perfil de calidad (escalas mínima y máxima permitidas).
-   * @param resting Si el bucle está en reposo: mientras lo está, los frames son lentos a propósito y no se miden.
+   * @param resting Si el bucle va a la mitad del ritmo (en reposo, o porque la CPU no alcanza): mientras lo
+   * está, los frames son lentos a propósito o por la CPU, que bajar la resolución no arregla, y no se miden.
    */
   public constructor(
     private readonly stage: Stage,

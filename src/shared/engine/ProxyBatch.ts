@@ -2,7 +2,7 @@ import {
   BufferAttribute,
   Mesh,
   MeshStandardMaterial,
-  type BufferGeometry,
+  BufferGeometry,
   type Material,
   type MeshBasicMaterial,
 } from 'three';
@@ -28,6 +28,7 @@ export class ProxyBatch {
   private static readonly TRIANGLE = 3;
   private static readonly SURFACE = 2;
   private static readonly RIG = new ProxyRig();
+  private static readonly EVERY_FRAME = { every: 1, turn: 0 };
 
   public readonly mesh: Mesh;
 
@@ -75,20 +76,15 @@ export class ProxyBatch {
    * @param share.every Cada cuántos materiales se revisa uno.
    * @param share.turn Frame actual.
    */
-  public sync(force = false, share = { every: 1, turn: 0 }): void {
-    this.entries.forEach((entry, index) => {
-      if (!force && (index + share.turn) % share.every !== 0) {
-        return;
+  public sync(force = false, share = ProxyBatch.EVERY_FRAME): void {
+    const step = force ? 1 : Math.max(1, share.every);
+    const first = force ? 0 : (step - (share.turn % step)) % step;
+    for (let index = first; index < this.entries.length; index += step) {
+      const entry = this.entries[index];
+      if (entry) {
+        this.refresh(entry, force);
       }
-      this.read(entry.material);
-      if (!force && this.current.every((value, index) => value === entry.last[index])) {
-        return;
-      }
-      entry.last.set(this.current);
-      entry.ranges.forEach(({ start, count }) => {
-        this.write(start, count);
-      });
-    });
+    }
   }
 
   /**
@@ -114,6 +110,24 @@ export class ProxyBatch {
     this.mesh.geometry.dispose();
     (this.mesh.material as Material).dispose();
     this.atlas?.texture.dispose();
+  }
+
+  /**
+   * Relee los valores de un material y, si cambiaron (o se fuerza), los escribe en sus vértices. Sin closures ni
+   * iteradores: corre para cada material en cada frame y la basura que dejaría dispara pausas del recolector.
+   *
+   * @param entry Material con sus rangos de vértices.
+   * @param force Reescribir aunque no haya cambios.
+   */
+  private refresh(entry: ProxyEntry, force: boolean): void {
+    this.read(entry.material);
+    if (!force && ProxyBatch.same(this.current, entry.last)) {
+      return;
+    }
+    entry.last.set(this.current);
+    for (const range of entry.ranges) {
+      this.write(range.start, range.count);
+    }
   }
 
   /**
@@ -174,14 +188,15 @@ export class ProxyBatch {
 
   /**
    * Copia la geometría de una malla en el espacio del lote: el mundo, o el de la malla atada a su hueso si el
-   * lote es articulado. Si la malla está espejada invierte sus triángulos.
+   * lote es articulado. Si la malla está espejada invierte sus triángulos. Copia sobre una geometría base (no
+   * `clone`): clonar una `CylinderGeometry` o similar arma primero una por defecto que se descarta enseguida.
    *
    * @param mesh Malla original.
    * @param bone Posición de la malla en el lote.
    * @returns Copia de la geometría.
    */
   private place(mesh: Mesh, bone: number): BufferGeometry {
-    const part = mesh.geometry.clone();
+    const part = new BufferGeometry().copy(mesh.geometry);
     if (this.rigid) {
       ProxyBatch.RIG.attach(part, bone);
     } else {
@@ -356,5 +371,21 @@ export class ProxyBatch {
     values[at] = x;
     values[at + 1] = y;
     values[at + 2] = z;
+  }
+
+  /**
+   * Si dos listas de valores son iguales.
+   *
+   * @param current Valores actuales.
+   * @param last Valores copiados.
+   * @returns `true` si no cambió ninguno.
+   */
+  private static same(current: Float32Array, last: Float32Array): boolean {
+    for (let index = 0; index < current.length; index += 1) {
+      if (current[index] !== last[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 }

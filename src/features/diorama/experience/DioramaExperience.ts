@@ -97,7 +97,7 @@ export class DioramaExperience {
     const audio = sound.audio;
     this.diorama = new DioramaScene({ materials, textures, random, quality, instrument, weather, audio });
     this.director = new CameraDirector(this.stage.camera, canvas);
-    this.resolution = new AdaptiveResolution(this.stage, quality, () => this.loop.resting);
+    this.resolution = new AdaptiveResolution(this.stage, quality, () => this.loop.halved);
     this.scheduler = new UpdateScheduler(this.stage.camera);
     this.culler = new DetailCuller(this.stage.camera, this.gate);
     this.loop = new RenderLoop(this.stage.renderer, this.stage.render.bind(this.stage), this.stage.stats);
@@ -443,12 +443,16 @@ export class DioramaExperience {
    */
   private async warmUp(): Promise<void> {
     await this.stage.warmUp();
-    const lights = new LightZones(this.stage.renderer, this.stage.scene, this.stage.camera);
+    const lights = new LightZones((root) => this.stage.compile(root));
     const { street, workshop } = DioramaExperience.ZONES;
     lights.assign(street, this.diorama.streetRoots);
     lights.assign(workshop, this.diorama.workshopRoots);
-    await lights.precompile([[street], [workshop]]);
+    await lights.precompile([[street], [workshop]], this.proxy?.rigVariants() ?? []);
+    this.stage.settlePrograms();
     this.lights = lights;
+    this.proxy?.onBuilt((meshes) => {
+      lights.prepare(meshes);
+    });
   }
 
   /**

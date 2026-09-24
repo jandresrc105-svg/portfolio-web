@@ -6,7 +6,8 @@ import type { Updatable } from './Updatable';
  * Bucle de render: notifica a los {@link Updatable} suscritos y luego dibuja el frame, a un ritmo parejo
  * cercano a 60 fps aunque la pantalla refresque más rápido ({@link FramePacer}). Con la pestaña oculta el
  * navegador deja de pedir frames y el bucle se detiene solo. Tras unos segundos sin interacción entra en
- * reposo (la mitad del ritmo) hasta el siguiente {@link RenderLoop.wake}.
+ * reposo (la mitad del ritmo) hasta el siguiente {@link RenderLoop.wake}. Cada frame dibujado le informa al
+ * {@link FramePacer} cuánto costó, para que baje a la mitad del ritmo, parejo, si la CPU no alcanza.
  */
 export class RenderLoop {
   private static readonly MIN_FPS = 20;
@@ -37,6 +38,16 @@ export class RenderLoop {
    */
   public get resting(): boolean {
     return this.idleFor > RenderLoop.IDLE_SECONDS;
+  }
+
+  /**
+   * Si dibuja a la mitad del ritmo, en reposo o porque la CPU no alcanza para el ritmo completo. En ese caso los
+   * frames tardan el doble a propósito y no indican que falte GPU.
+   *
+   * @returns `true` si va a la mitad del ritmo.
+   */
+  public get halved(): boolean {
+    return this.resting || this.pacer.halved;
   }
 
   /**
@@ -82,6 +93,7 @@ export class RenderLoop {
     if (!this.pacer.shouldDraw(timestamp)) {
       return;
     }
+    const start = performance.now();
     this.stats?.beginFrame();
     this.timer.update(timestamp);
     const delta = Math.min(this.timer.getDelta(), 1 / RenderLoop.MIN_FPS);
@@ -93,5 +105,6 @@ export class RenderLoop {
     });
     this.draw();
     this.stats?.endFrame();
+    this.pacer.record(performance.now() - start);
   }
 }
