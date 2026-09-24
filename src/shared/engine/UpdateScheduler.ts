@@ -14,7 +14,7 @@ import type { Updatable } from './Updatable';
  */
 export class UpdateScheduler implements Updatable {
   private static readonly NEAR_FRACTION = 0.6;
-  private static readonly DETAIL_FRACTION = 0.1;
+  private static readonly DETAIL_FRACTION = 0.25;
   private static readonly SLOW_RATE = 30;
 
   private readonly pieces: ScheduledPiece[] = [];

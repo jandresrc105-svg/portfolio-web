@@ -11,6 +11,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { FrameStats } from './FrameStats';
+import { PoseCheck } from './PoseCheck';
 import { PostProcessing } from './PostProcessing';
 import { ProgramSort } from './ProgramSort';
 import type { QualityProfile } from './QualityProfile';
@@ -56,8 +57,7 @@ export class Stage {
     });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.camera.layers.enable(RenderLayer.Background);
-    this.scene.matrixWorldAutoUpdate = false;
-    this.scene.matrixAutoUpdate = false;
+    this.prepareScene();
     this.stats = new FrameStats(this.renderer);
     const sort = new ProgramSort();
     this.renderer.setOpaqueSort(sort.compare.bind(sort));
@@ -163,6 +163,17 @@ export class Stage {
     this.environment?.dispose();
     this.post.dispose();
     this.renderer.dispose();
+  }
+
+  /**
+   * Prepara la escena para que las matrices se recalculen solo donde algo cambió: la escena no recompone la
+   * suya (no se mueve), three.js no la recorre en cada `render` y cada objeto recompone su matriz solo si su
+   * pose cambió ({@link PoseCheck}).
+   */
+  private prepareScene(): void {
+    this.scene.matrixWorldAutoUpdate = false;
+    this.scene.matrixAutoUpdate = false;
+    new PoseCheck().install();
   }
 
   /**
