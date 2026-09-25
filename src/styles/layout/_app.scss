@@ -1,0 +1,12 @@
+@use '../abstracts' as *;
+
+.app {
+  position: relative;
+
+  &__content {
+    position: fixed;
+    inset: 0;
+    z-index: $z-content;
+    pointer-events: none;
+  }
+}

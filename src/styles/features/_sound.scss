@@ -1,0 +1,96 @@
+@use '../abstracts' as *;
+
+.sound-toggle {
+  position: fixed;
+  right: $space-md;
+  bottom: $space-md;
+  z-index: $z-tooltip;
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-sm $space-md;
+  border: 1px solid $glass-border;
+  border-radius: $radius-pill;
+  background: $glass-background;
+  color: $color-muted;
+  font-family: $font-mono;
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  backdrop-filter: blur($glass-blur);
+  cursor: pointer;
+  animation: sound-toggle-in 0.8s $ease-out both;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: rgba($color-cyan, 0.5);
+    color: $color-text;
+    outline: none;
+  }
+
+  &__equalizer {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 12px;
+  }
+
+  &__bar {
+    width: 2px;
+    height: 3px;
+    background: currentColor;
+    transition: height 0.3s ease;
+  }
+
+  &--on {
+    color: $color-cyan;
+
+    .sound-toggle__bar {
+      animation: sound-bar 0.9s ease-in-out infinite;
+
+      @for $index from 1 through 4 {
+        &:nth-child(#{$index}) {
+          animation-delay: #{$index * -0.23}s;
+        }
+      }
+    }
+  }
+
+  @include from('md') {
+    right: $space-lg;
+    bottom: $space-lg;
+  }
+
+  @include reduced-motion {
+    &--on .sound-toggle__bar {
+      height: 8px;
+      animation: none;
+    }
+  }
+}
+
+@keyframes sound-bar {
+  0%,
+  100% {
+    height: 3px;
+  }
+
+  50% {
+    height: 12px;
+  }
+}
+
+@keyframes sound-toggle-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

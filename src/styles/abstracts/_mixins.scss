@@ -1,0 +1,14 @@
+@use 'sass:map';
+@use 'tokens';
+
+@mixin from($breakpoint) {
+  @media (min-width: map.get(tokens.$breakpoints, $breakpoint)) {
+    @content;
+  }
+}
+
+@mixin reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}

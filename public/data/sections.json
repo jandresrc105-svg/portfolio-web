@@ -1,0 +1,361 @@
+[
+  {
+    "id": "sobre-mi",
+    "eyebrow": "01 — Sobre mí",
+    "title": "Del circuito al navegador",
+    "align": "left",
+    "paragraphs": [
+      "Soy ingeniero electrónico con énfasis en automatización y control. Aprendí a pensar en sistemas: entradas, salidas, realimentación y estabilidad.",
+      "Hace más de dos años llevé esa forma de pensar al desarrollo web. Construyo interfaces con arquitectura limpia, programación orientada a objetos y patrones de diseño, y me apasiona llevar la web al 3D."
+    ],
+    "tags": ["Ingeniería electrónica", "Automatización", "Control", "Desarrollo web"]
+  },
+  {
+    "id": "tecnologias",
+    "eyebrow": "02 — Tecnologías",
+    "title": "Lo que manejo",
+    "align": "left",
+    "showcase": true,
+    "paragraphs": [
+      "Cada lata de la máquina es una tecnología: recórrelas con las flechas o haz clic en una lata."
+    ],
+    "items": [
+      {
+        "title": "HTML, CSS y JavaScript",
+        "can": "web",
+        "meta": "Frontend · Base",
+        "description": "La base de todo lo que construyo en la web: maquetación semántica y accesible, estilos con Sass y BEM, y JavaScript moderno.",
+        "tags": ["HTML5", "CSS3", "Sass", "JavaScript"]
+      },
+      {
+        "title": "TypeScript",
+        "can": "typescript",
+        "meta": "Frontend · Lenguaje",
+        "description": "Mi lenguaje por defecto: tipado estricto, POO e interfaces claras. Este portafolio está escrito en TypeScript.",
+        "tags": ["Tipado estricto", "POO", "Genéricos"]
+      },
+      {
+        "title": "React",
+        "can": "react",
+        "meta": "Frontend · Framework",
+        "description": "Interfaces por componentes con hooks, manejo de estado y enrutamiento.",
+        "tags": ["Hooks", "Componentes", "SPA"]
+      },
+      {
+        "title": "Vue",
+        "can": "vue",
+        "meta": "Frontend · Framework",
+        "description": "Interfaces reactivas con componentes de archivo único y Composition API.",
+        "tags": ["Composition API", "SFC"]
+      },
+      {
+        "title": "Angular",
+        "can": "angular",
+        "meta": "Frontend · Framework",
+        "description": "Aplicaciones estructuradas con módulos, servicios, inyección de dependencias y RxJS.",
+        "tags": ["RxJS", "Inyección de dependencias", "Formularios"]
+      },
+      {
+        "title": "Three.js, WebGL y GLSL",
+        "can": "threejs",
+        "meta": "Gráficos 3D",
+        "description": "Escenas 3D en el navegador, shaders propios y post-procesado. Este diorama es un ejemplo.",
+        "tags": ["Three.js", "WebGL", "GLSL", "GSAP"]
+      },
+      {
+        "title": "Node.js",
+        "can": "node",
+        "meta": "Backend",
+        "description": "APIs REST y servicios en JavaScript y TypeScript del lado del servidor.",
+        "tags": ["APIs REST", "npm", "TypeScript"]
+      },
+      {
+        "title": ".NET y C#",
+        "can": "dotnet",
+        "meta": "Backend",
+        "description": "Aplicaciones y APIs con C# y .NET, organizadas por capas.",
+        "tags": ["C#", ".NET", "APIs"]
+      },
+      {
+        "title": "Unity",
+        "can": "unity",
+        "meta": "Videojuegos y 3D",
+        "description": "Experiencias interactivas y simulaciones en tiempo real programadas en C#.",
+        "tags": ["C#", "Física", "Tiempo real"]
+      },
+      {
+        "title": "Python",
+        "can": "python",
+        "meta": "Lenguaje",
+        "description": "Automatización de tareas, scripts, análisis de datos y prototipos rápidos.",
+        "tags": ["Scripts", "Datos", "Automatización"]
+      },
+      {
+        "title": "MicroPython",
+        "can": "micropython",
+        "meta": "Embebidos",
+        "description": "Python directamente en microcontroladores para prototipar hardware con rapidez.",
+        "tags": ["ESP32", "Sensores", "Prototipos"]
+      },
+      {
+        "title": "C y C++",
+        "can": "cpp",
+        "meta": "Embebidos",
+        "description": "Firmware para microcontroladores: periféricos, tiempos y manejo de memoria.",
+        "tags": ["Firmware", "Microcontroladores"]
+      },
+      {
+        "title": "Sistemas embebidos",
+        "can": "embedded",
+        "meta": "Hardware · IoT",
+        "description": "Prototipos con Arduino, ESP32 y Raspberry Pi: sensores, actuadores y comunicación IoT por MQTT.",
+        "tags": ["Arduino", "ESP32", "Raspberry Pi", "MQTT"]
+      },
+      {
+        "title": "Automatización y control",
+        "can": "automation",
+        "meta": "Ingeniería",
+        "description": "Control de procesos con PLC y SCADA, y modelado y simulación de sistemas en MATLAB y Simulink.",
+        "tags": ["PLC", "SCADA", "MATLAB", "Simulink"]
+      },
+      {
+        "title": "Inteligencia artificial",
+        "can": "ai",
+        "meta": "IA",
+        "description": "Integro modelos de IA en aplicaciones y los uso como herramienta diaria de desarrollo.",
+        "tags": ["LLMs", "APIs de IA", "Prompting"]
+      },
+      {
+        "title": "SQL y PostgreSQL",
+        "can": "sql",
+        "meta": "Datos",
+        "description": "Bases de datos relacionales: modelado, consultas, índices y migraciones.",
+        "tags": ["SQL", "PostgreSQL", "Modelado"]
+      },
+      {
+        "title": "MongoDB",
+        "can": "mongodb",
+        "meta": "Datos",
+        "description": "Bases de datos documentales para esquemas flexibles.",
+        "tags": ["NoSQL", "Agregaciones"]
+      },
+      {
+        "title": "Docker y Linux",
+        "can": "docker",
+        "meta": "DevOps",
+        "description": "Contenedores para entornos reproducibles y despliegue en servidores Linux.",
+        "tags": ["Docker", "Compose", "Linux", "Bash"]
+      },
+      {
+        "title": "AWS",
+        "can": "aws",
+        "meta": "Nube",
+        "description": "Despliegue y alojamiento de aplicaciones en la nube de AWS.",
+        "tags": ["Nube", "Despliegue"]
+      },
+      {
+        "title": "Git, CI/CD y testing",
+        "can": "git",
+        "meta": "Flujo de trabajo",
+        "description": "Control de versiones con ramas, integración continua con GitHub Actions y pruebas automatizadas con Vitest y Jest.",
+        "tags": ["Git", "GitHub Actions", "Vitest", "Jest"]
+      }
+    ]
+  },
+  {
+    "id": "experiencia",
+    "eyebrow": "03 — Experiencia",
+    "title": "Trayectoria",
+    "align": "right",
+    "paragraphs": [
+      "El tablero del poste guarda por dónde ha pasado la corriente. Ábrelo y sube los breakers: cada uno es una etapa, y cuando todos están arriba la corriente llega al presente.",
+      "El MAIN corta la red de la calle: se apagan la farola, el ramen y el semáforo, pero el taller de arriba sigue con su batería solar. El medidor cuenta mi tiempo de experiencia."
+    ],
+    "timeline": true,
+    "since": "2024-07-01",
+    "items": [
+      {
+        "title": "Ingeniería Electrónica",
+        "breaker": "UQ",
+        "meta": "Universidad del Quindío · 2019 — 2025",
+        "description": "Profundización en automatización y control: laboratorios de control de plantas reales. [Completa: materias, laboratorios o proyectos destacados].",
+        "tags": ["Automatización", "Control", "Sistemas digitales"]
+      },
+      {
+        "title": "Dosificador de comida para mascotas",
+        "breaker": "ESP32",
+        "meta": "Proyecto · [Año]",
+        "description": "Aplicación web para programar horarios y cantidades de comida, alojada en una ESP32 con DNS propio. La ESP32 era a la vez servidor, base de datos y el embebido que movía el dosificador. [Completa: detalles y resultados].",
+        "tags": ["ESP32", "IoT", "Embebidos"]
+      },
+      {
+        "title": "Diplomado en desarrollo de videojuegos",
+        "breaker": "UNITY",
+        "meta": "Universidad del Quindío · 2024",
+        "description": "Mi trabajo de grado. [Completa: de qué trataba el juego o la simulación].",
+        "tags": ["Unity", "C#"]
+      },
+      {
+        "title": "Desarrollador de Software",
+        "breaker": "DEV",
+        "meta": "OptiPlant Consultores · Jul 2024 — Actualidad",
+        "description": "[Completa: qué construyes, con qué stack y dos o tres logros concretos].",
+        "tags": ["TypeScript", "Frontend"]
+      }
+    ],
+    "certificates": [
+      {
+        "title": "Introducción a cloud computing con AWS",
+        "issuer": "Udemy",
+        "year": "2025"
+      },
+      {
+        "title": "Diplomado de desarrollo de videojuegos en Unity",
+        "issuer": "UQ",
+        "year": "2024"
+      },
+      {
+        "title": "JavaScript Moderno",
+        "issuer": "Udemy",
+        "year": "2023"
+      },
+      {
+        "title": "Fundamentals of Deep Learning",
+        "issuer": "NVIDIA",
+        "year": "2022"
+      }
+    ]
+  },
+  {
+    "id": "proyectos",
+    "eyebrow": "04 — Proyectos",
+    "title": "Del banco de pruebas al mundo real",
+    "align": "left",
+    "bench": true,
+    "paragraphs": [
+      "El taller del segundo piso es mi banco de pruebas. Cada placa colgada en el tablero es un proyecto: recórrelas con las flechas o haz clic en una placa para llevarla al banco.",
+      "La fuente y la lámpara de lupa funcionan: apágalas y préndelas con un clic."
+    ],
+    "items": [
+      {
+        "title": "Portafolio 3D",
+        "board": "PORTFOLIO-3D",
+        "meta": "2026 · Personal",
+        "description": "Este sitio: un diorama procedural en Three.js con equipos que funcionan de verdad (osciloscopio con un lazo PID simulado, tablero de breakers, teléfono y este banco), sobre una arquitectura POO con inyección de dependencias.",
+        "tags": ["TypeScript", "Three.js", "GLSL", "GSAP", "Sass"],
+        "link": {
+          "label": "Ver código",
+          "href": "https://github.com/jandresrc105-svg/portfolio-web"
+        }
+      },
+      {
+        "title": "Dosificador de comida para mascotas",
+        "board": "ESP32 FEEDER",
+        "meta": "Proyecto · [Año]",
+        "description": "Aplicación web para programar horarios y cantidades de comida, alojada en una ESP32 con DNS propio. La ESP32 era a la vez servidor, base de datos y el embebido que movía el dosificador. [Completa: detalles y resultados].",
+        "tags": ["ESP32", "IoT", "Embebidos", "Web"]
+      },
+      {
+        "title": "Proyecto de automatización",
+        "board": "PLC LAB",
+        "meta": "Año · Contexto",
+        "description": "[Completa: un proyecto donde se crucen la electrónica y el software: control, sensores, dashboards o IoT. El problema, cómo lo resolviste y el resultado medible].",
+        "tags": ["Control", "Hardware"]
+      }
+    ]
+  },
+  {
+    "id": "habilidades",
+    "eyebrow": "05 — Habilidades",
+    "title": "Señal estable, respuesta rápida",
+    "align": "left",
+    "paragraphs": [
+      "La traza del osciloscopio no es un video: es un lazo de control PID simulado en vivo sobre una planta de tercer orden, con saturación del actuador y anti-windup. El osciloscopio funciona de verdad: enciéndelo o apágalo, congela la traza con RUN/STOP, cambia las escalas y ajusta Kp, Ki, Kd y la amplitud y frecuencia de la onda cuadrada."
+    ],
+    "tuner": true,
+    "items": [
+      {
+        "title": "Frontend",
+        "description": "Interfaces mantenibles con tipado estricto y arquitectura por features.",
+        "tags": ["TypeScript", "JavaScript", "HTML", "Sass"]
+      },
+      {
+        "title": "Gráficos y animación",
+        "description": "Escenas 3D, shaders y animaciones ligadas al scroll.",
+        "tags": ["Three.js", "WebGL", "GLSL", "GSAP"]
+      },
+      {
+        "title": "Ingeniería",
+        "description": "Sistemas de control, automatización e instrumentación.",
+        "tags": ["Control", "PID", "Automatización", "Electrónica"]
+      }
+    ]
+  },
+  {
+    "id": "laboratorio",
+    "eyebrow": "06 — Laboratorio",
+    "title": "Taller abierto",
+    "align": "left",
+    "paragraphs": [
+      "Todo lo que ves en el taller funciona: toma las herramientas de la pared, gira las perillas, prende y apaga los equipos y las luces.",
+      "Cada estación es un experimento pequeño donde se cruzan la electrónica y el software."
+    ],
+    "items": [
+      {
+        "title": "Pared de herramientas",
+        "description": "Toma cualquier herramienta del tablero perforado: sale de su gancho y te cuenta para qué sirve.",
+        "tags": ["Herramientas", "Didáctico"]
+      },
+      {
+        "title": "Pelado y estañado de cable",
+        "description": "Pela el cable, tuerce los hilos y estáñalos con el cautín, paso a paso.",
+        "tags": ["Soldadura", "Montaje"]
+      },
+      {
+        "title": "Ley de Ohm en vivo",
+        "description": "Gira las décadas de resistencias y mira cómo cambia la corriente del LED. Si te pasas, se quema.",
+        "tags": ["Ohm", "Circuitos"]
+      },
+      {
+        "title": "Receptor de radio",
+        "description": "Sintoniza con el dial, extiende la antena y decodifica el mensaje en morse que aparece en el espectro.",
+        "tags": ["RF", "DSP", "Morse"]
+      },
+      {
+        "title": "Firmware en vivo",
+        "description": "Elige un programa en el portátil, súbelo al microcontrolador y mira cómo corre en su matriz de LEDs.",
+        "tags": ["C++", "MicroPython", "Embebidos"]
+      },
+      {
+        "title": "Luces del taller",
+        "description": "El tablero de interruptores controla cada luz del local, y la bola de plasma sigue tu puntero.",
+        "tags": ["Iluminación", "Alta tensión"]
+      }
+    ]
+  },
+  {
+    "id": "contacto",
+    "eyebrow": "07 — Contacto",
+    "title": "¿Hablamos?",
+    "align": "left",
+    "paragraphs": [
+      "Si tienes un proyecto, una vacante o simplemente quieres hablar de 3D, control o ramen, llámame.",
+      "Descuelga el teléfono de la cabina y marca: cada número de la tarjeta de marcado rápido abre un canal."
+    ],
+    "phone": true,
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/jandresrc105-svg"
+      },
+      {
+        "label": "LinkedIn",
+        "href": "https://www.linkedin.com/in/juan-reyes-carmona/"
+      },
+      {
+        "label": "Gmail",
+        "href": "https://mail.google.com/mail/?view=cm&fs=1&to=tu-correo@ejemplo.com"
+      }
+    ]
+  }
+]

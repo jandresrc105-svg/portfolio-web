@@ -1,0 +1,44 @@
+$color-night: #05060c;
+$color-surface: #0d0f18;
+$color-text: #ece8f4;
+$color-muted: #9a98b3;
+$color-neon: #ff2d78;
+$color-cyan: #3fd8ff;
+$color-lantern: #ffb347;
+$color-terminal: #6dffb3;
+$color-trace: #ffe14a;
+
+$glass-background: rgba(10, 11, 20, 0.58);
+$glass-border: rgba(255, 255, 255, 0.09);
+$glass-blur: 14px;
+
+$font-body:
+  'Inter',
+  system-ui,
+  -apple-system,
+  'Segoe UI',
+  sans-serif;
+$font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+$font-japanese: 'Noto Sans JP', 'Yu Gothic', 'Hiragino Sans', sans-serif;
+
+$space-xs: 0.25rem;
+$space-sm: 0.5rem;
+$space-md: 1rem;
+$space-lg: 2rem;
+$space-xl: 4rem;
+
+$radius-md: 14px;
+$radius-pill: 999px;
+
+$ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+$z-scene: 0;
+$z-content: 10;
+$z-tooltip: 20;
+$z-boot: 100;
+
+$breakpoints: (
+  'sm': 640px,
+  'md': 960px,
+  'lg': 1280px,
+);

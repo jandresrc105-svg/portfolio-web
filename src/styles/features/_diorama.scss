@@ -1,0 +1,81 @@
+@use '../abstracts' as *;
+
+.diorama {
+  position: fixed;
+  inset: 0;
+  z-index: $z-scene;
+  background: radial-gradient(ellipse at 50% 70%, #151a33 0%, $color-night 70%);
+
+  &__canvas {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+
+    .is-pointing & {
+      cursor: pointer;
+    }
+
+    .is-dragging & {
+      cursor: grabbing;
+    }
+
+    .is-tuning & {
+      cursor: ns-resize;
+    }
+  }
+
+  &__tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: $z-tooltip;
+    padding: $space-xs $space-sm;
+    border: 1px solid rgba($color-cyan, 0.5);
+    border-radius: $radius-pill;
+    background: rgba($color-night, 0.8);
+    color: $color-cyan;
+    font-family: $font-mono;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+
+    &--visible {
+      opacity: 1;
+    }
+  }
+
+  &__hint {
+    position: fixed;
+    bottom: $space-md;
+    left: 50%;
+    color: $color-muted;
+    font-family: $font-mono;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, 10px);
+    transition:
+      opacity 1s $ease-out 1.5s,
+      transform 1s $ease-out 1.5s;
+  }
+
+  &--ready &__hint {
+    opacity: 0.8;
+    transform: translate(-50%, 0);
+  }
+
+  &--fallback {
+    background:
+      radial-gradient(circle at 70% 30%, rgba($color-neon, 0.25), transparent 45%),
+      radial-gradient(circle at 25% 75%, rgba($color-cyan, 0.18), transparent 45%), $color-night;
+
+    .diorama__canvas {
+      display: none;
+    }
+  }
+}

@@ -1,0 +1,688 @@
+import type { Camera, Object3D, Scene, Vector3Like } from 'three';
+import type { AudioEngine } from '@shared/audio/AudioEngine';
+import type { SeededRandom } from '@shared/core/math/SeededRandom';
+import type { QualityProfile } from '@shared/engine/QualityProfile';
+import type { SceneObject } from '@shared/engine/SceneObject';
+import type { Updatable } from '@shared/engine/Updatable';
+import type { Hotspot } from '../models/Hotspot';
+import { CrossingSound } from '../audio/CrossingSound';
+import { PowerMode } from '../models/PowerMode';
+import type { Placement } from '../models/Placement';
+import type { Powerable } from '../models/Powerable';
+import type { WorkshopDevice } from '../models/WorkshopDevice';
+import type { PowerStep } from '../models/PowerStep';
+import type { Weather } from '../models/Weather';
+import { BreakerPanelService } from '../services/BreakerPanelService';
+import { PayPhoneService } from '../services/PayPhoneService';
+import { WorkbenchService } from '../services/WorkbenchService';
+import type { ScopeControlService } from '../services/ScopeControlService';
+import { CanvasTextureFactory } from './CanvasTextureFactory';
+import { PowerGrid } from './PowerGrid';
+import { RenderTuning } from './RenderTuning';
+import { PowerGroup } from './PowerGroup';
+import { Storm } from './Storm';
+import type { MaterialLibrary } from './MaterialLibrary';
+import type { DioramaSceneOptions } from './DioramaSceneOptions';
+import { Chef } from './characters/Chef';
+import { Juan } from './characters/Juan';
+import { CircuitBoard } from './objects/CircuitBoard';
+import { CitySkyline } from './objects/CitySkyline';
+import { CityBokeh } from './objects/CityBokeh';
+import { ContactShadows } from './objects/ContactShadows';
+import { FloatingDebris } from './objects/FloatingDebris';
+import { HotspotMarker } from './objects/HotspotMarker';
+import { HotspotMarkers } from './objects/HotspotMarkers';
+import { Island } from './objects/Island';
+import { KitchenProps } from './objects/KitchenProps';
+import { Lantern } from './objects/Lantern';
+import { LightCone } from './objects/LightCone';
+import { ManekiNeko } from './objects/ManekiNeko';
+import { Moonlight } from './objects/Moonlight';
+import { NeonSign } from './objects/NeonSign';
+import { Noren } from './objects/Noren';
+import { Oscilloscope } from './objects/Oscilloscope';
+import { PhoneBooth } from './objects/PhoneBooth';
+import { Puddles } from './objects/Puddles';
+import { Rain } from './objects/Rain';
+import { RainSplashes } from './objects/RainSplashes';
+import { RamenBowl } from './objects/RamenBowl';
+import { RoofDrips } from './objects/RoofDrips';
+import { Sidewalk } from './objects/Sidewalk';
+import { SideBlinds } from './objects/SideBlinds';
+import { SkyDome } from './objects/SkyDome';
+import { Stall } from './objects/Stall';
+import { StallInterior } from './objects/StallInterior';
+import { StreetMarkings } from './objects/StreetMarkings';
+import { StringLights } from './objects/StringLights';
+import { TrafficSignal } from './objects/TrafficSignal';
+import { UtilityPole } from './objects/UtilityPole';
+import { VendingMachine } from './objects/VendingMachine';
+import { BreakerPanel } from './panel/BreakerPanel';
+import { RepairShop } from './workshop/RepairShop';
+import { ShopPlinth } from './workshop/ShopPlinth';
+import { ShopStairs } from './workshop/ShopStairs';
+import { SolarArray } from './workshop/SolarArray';
+import { SolarController } from './workshop/SolarController';
+import { Workbench } from './workshop/Workbench';
+import { WorkshopCatalog } from './workshop/WorkshopCatalog';
+import { WorkshopLayout } from './workshop/WorkshopLayout';
+
+/**
+ * Diorama completo (patrón Composite): crea cada pieza, la agrega a la escena y expone
+ * qué se actualiza por frame, en qué orden se enciende y dónde están los puntos interactivos.
+ */
+export class DioramaScene {
+  private static readonly HOTSPOTS: Hotspot[] = [
+    { sectionId: 'sobre-mi', label: 'Sobre mí', anchor: { x: 0.5, y: 2.08, z: 1.9 } },
+    { sectionId: 'tecnologias', label: 'Tecnologías', anchor: { x: 3.55, y: 2.25, z: 0.35 } },
+    { sectionId: 'experiencia', label: 'Experiencia', anchor: { x: -3.75, y: 2.1, z: -0.6 } },
+    { sectionId: 'proyectos', label: 'Proyectos', anchor: { x: 0.8, y: 6.3, z: 0.85 } },
+    { sectionId: 'habilidades', label: 'Habilidades', anchor: { x: 0, y: 6.3, z: 0.85 } },
+    { sectionId: 'laboratorio', label: 'Laboratorio', anchor: { x: -0.8, y: 6.3, z: 0.85 } },
+    { sectionId: 'contacto', label: 'Contacto', anchor: { x: -4.2, y: 2.65, z: 0.9 } },
+  ];
+  private static readonly VENDING: Placement = { position: { x: 3.55, y: 0.1, z: 0.05 }, rotationY: -0.42 };
+  private static readonly SHOWCASE_SECTION = 'tecnologias';
+  private static readonly CONTACT_SECTION = 'contacto';
+  private static readonly TIMELINE_SECTION = 'experiencia';
+  private static readonly BENCH_SECTION = 'proyectos';
+  private static readonly WORKSHOP_SECTIONS = ['proyectos', 'habilidades', 'laboratorio'];
+  private static readonly LANTERNS = [
+    { anchor: { x: -2.35, y: 2.55, z: 1.62 }, glyph: '麺', phase: 0, at: 1.6 },
+    { anchor: { x: 2.35, y: 2.55, z: 1.62 }, glyph: '灯', phase: 1.7, at: 1.95 },
+  ];
+  private static readonly MAIN_SIGN = {
+    width: 3.1,
+    height: 0.8,
+    x: 0,
+    y: 3.3,
+    z: 1.25,
+    size: 150,
+    light: 10,
+  };
+  private static readonly SIDE_SIGN = {
+    width: 1.05,
+    height: 0.62,
+    x: 2.72,
+    y: 2.15,
+    z: 1.05,
+    rotation: -0.55,
+    light: 0,
+  };
+  private static readonly WORKSHOP_SIGN = { width: 2.4, height: 0.46, x: 0, y: 2.74, z: 1.485 };
+  private static readonly TIMELINE = {
+    street: 0.9,
+    interior: 2.35,
+    mainSign: 2.95,
+    sideSign: 3.45,
+    vending: 3.75,
+    phone: 3.6,
+    signal: 1.2,
+    electronics: 4.1,
+    workshop: 4.25,
+    workshopSign: 4.45,
+    markers: 5.3,
+    markerStagger: 0.12,
+  };
+
+  public readonly updatables: Updatable[] = [];
+  public readonly pieces: (SceneObject & Updatable)[] = [];
+  public readonly powerSteps: PowerStep[] = [];
+  public readonly markers: HotspotMarker[] = [];
+  public storm: Storm | null = null;
+  public mainSign: NeonSign | null = null;
+  public puddles: Puddles | null = null;
+  public vending: VendingMachine | null = null;
+  public oscilloscope: Oscilloscope | null = null;
+  public phoneBooth: PhoneBooth | null = null;
+  public breakerPanel: BreakerPanel | null = null;
+  public readonly grid = new PowerGrid();
+  public workbench: Workbench | null = null;
+  public workshopDevices: WorkshopDevice[] = [];
+
+  private readonly objects: SceneObject[] = [];
+  private workshopObjects: SceneObject[] = [];
+  private readonly workshop = new WorkshopLayout();
+  private readonly luminous: SceneObject[] = [];
+  private readonly materials: MaterialLibrary;
+  private readonly textures: CanvasTextureFactory;
+  private readonly random: SeededRandom;
+  private readonly quality: QualityProfile;
+  private readonly instrument: ScopeControlService;
+  private readonly weather: Weather;
+  private readonly audio: AudioEngine;
+  private markerSet: HotspotMarkers | null = null;
+
+  /**
+   * Prepara el diorama.
+   *
+   * @param options Materiales, texturas, azar, calidad, lazo de control y clima.
+   */
+  public constructor(options: DioramaSceneOptions) {
+    this.materials = options.materials;
+    this.textures = options.textures;
+    this.random = options.random;
+    this.quality = options.quality;
+    this.instrument = options.instrument;
+    this.weather = options.weather;
+    this.audio = options.audio;
+  }
+
+  /**
+   * Posición del letrero principal, fuente del zumbido de neón.
+   *
+   * @returns Posición en la escena.
+   */
+  public get neonPosition(): Vector3Like {
+    const { x, y, z } = DioramaScene.MAIN_SIGN;
+    return { x, y, z };
+  }
+
+  /**
+   * Puntos interactivos del diorama, en el orden de las secciones.
+   *
+   * @returns Lista de puntos interactivos.
+   */
+  public get hotspots(): readonly Hotspot[] {
+    return DioramaScene.HOTSPOTS;
+  }
+
+  /**
+   * Sección de la página que muestra la vitrina.
+   *
+   * @returns Id de la sección.
+   */
+  public get showcaseSection(): string {
+    return DioramaScene.SHOWCASE_SECTION;
+  }
+
+  /**
+   * Encuadre de cámara de la vitrina (el hero es el encuadre 0).
+   *
+   * @returns Índice del encuadre.
+   */
+  public get showcaseStop(): number {
+    return DioramaScene.stopOf(DioramaScene.SHOWCASE_SECTION);
+  }
+
+  /**
+   * Parada del recorrido de la sección de proyectos (la del banco del taller).
+   *
+   * @returns Índice de la parada.
+   */
+  public get benchStop(): number {
+    return DioramaScene.stopOf(DioramaScene.BENCH_SECTION);
+  }
+
+  /**
+   * Paradas del recorrido que se ven desde el taller (proyectos, habilidades y laboratorio): en todas ellas
+   * responden sus equipos.
+   *
+   * @returns Índices de las paradas.
+   */
+  public get workshopStops(): number[] {
+    return DioramaScene.WORKSHOP_SECTIONS.map((section) => DioramaScene.stopOf(section));
+  }
+
+  /**
+   * Parada del recorrido de la sección de la trayectoria (la del tablero del poste).
+   *
+   * @returns Índice de la parada.
+   */
+  public get timelineStop(): number {
+    return DioramaScene.stopOf(DioramaScene.TIMELINE_SECTION);
+  }
+
+  /**
+   * Parada del recorrido de la sección de contacto (la del teléfono).
+   *
+   * @returns Índice de la parada.
+   */
+  public get contactStop(): number {
+    return DioramaScene.stopOf(DioramaScene.CONTACT_SECTION);
+  }
+
+  /**
+   * Raíces 3D de las piezas del taller del segundo piso (sus luces forman una zona aparte).
+   *
+   * @returns Raíces.
+   */
+  public get workshopRoots(): Object3D[] {
+    return this.workshopObjects.map((object) => object.root);
+  }
+
+  /**
+   * Raíces 3D de las piezas de la calle (todo lo que no es el taller).
+   *
+   * @returns Raíces.
+   */
+  public get streetRoots(): Object3D[] {
+    return this.objects
+      .filter((object) => !this.workshopObjects.includes(object))
+      .map((object) => object.root);
+  }
+
+  /**
+   * Raíces de la calle que se pueden reemplazar por su versión unida: todo menos los marcadores (se tocan
+   * desde la vista general).
+   *
+   * @returns Raíces.
+   */
+  public get streetProxyRoots(): Object3D[] {
+    const markers = new Set<Object3D>(this.markers.map((marker) => marker.root));
+    return this.streetRoots.filter((root) => !markers.has(root));
+  }
+
+  /**
+   * Raíces 3D de todas las piezas del diorama.
+   *
+   * @returns Raíces.
+   */
+  public get roots(): Object3D[] {
+    return this.objects.map((object) => object.root);
+  }
+
+  /**
+   * Construye todas las piezas dentro de la escena.
+   *
+   * @param scene Escena destino.
+   * @param camera Cámara principal (los marcadores que no ve no se dibujan).
+   */
+  public build(scene: Scene, camera: Camera): void {
+    this.buildSky(scene);
+    this.buildEnvironment();
+    this.buildStall();
+    this.buildCounter();
+    this.buildStreet();
+    this.buildWorkshop();
+    this.buildMarkers(camera);
+    this.updatables.push(this.grid);
+    this.objects.forEach((object) => scene.add(object.create()));
+    new RenderTuning().apply(scene, this.objects, this.pieces, this.luminous);
+    if (this.markerSet) {
+      scene.add(this.markerSet.create());
+    }
+  }
+
+  /**
+   * Libera todos los recursos de GPU.
+   */
+  public dispose(): void {
+    this.objects.forEach((object) => {
+      object.dispose();
+    });
+    this.markerSet?.dispose();
+    this.materials.dispose();
+  }
+
+  /**
+   * Luna y fondo oscuro; según el clima, también el cielo con nubes, la ciudad y la tormenta que los ilumina.
+   *
+   * @param scene Escena (para fondo y niebla).
+   */
+  private buildSky(scene: Scene): void {
+    const moonlight = this.register(new Moonlight(scene, this.weather.fog));
+    if (!this.weather.backdrop) {
+      return;
+    }
+    const sky = this.animate(new SkyDome());
+    const city = this.register(new CitySkyline(this.quality.buildings, this.random));
+    if (this.weather.storm) {
+      this.storm = new Storm(moonlight.moon, sky, city, this.random);
+      this.updatables.push(this.storm);
+      this.powerSteps.push({ target: this.storm, at: DioramaScene.TIMELINE.markers, mode: PowerMode.Fade });
+    }
+  }
+
+  /**
+   * Isla flotante con marcas viales y charcos; según el clima, lluvia con salpicaduras, rocas flotantes
+   * y luces lejanas de la ciudad.
+   */
+  private buildEnvironment(): void {
+    this.register(new Island(this.materials, this.random));
+    this.register(new Sidewalk(this.materials));
+    this.register(new StreetMarkings(this.textures, this.random));
+    this.register(new ContactShadows(this.textures));
+    this.puddles = this.animate(new Puddles(this.quality.reflections, this.random));
+    if (this.weather.rain) {
+      this.animate(new RainSplashes(this.quality.splashes, this.random));
+      this.animate(new Rain(this.quality.rainDrops, this.random));
+    }
+    if (this.weather.backdrop) {
+      this.animate(new FloatingDebris(this.materials, this.random));
+      this.animate(new CityBokeh(this.textures, this.random));
+    }
+  }
+
+  /**
+   * Puesto: estructura, interior, cortinas, goteras (si llueve), cocina, cocinero, comensal, guirnalda y faroles.
+   */
+  private buildStall(): void {
+    this.register(new Stall(this.materials));
+    this.feed(
+      new StallInterior(this.materials, this.textures),
+      DioramaScene.TIMELINE.interior,
+      PowerMode.Fade,
+    );
+    this.animate(new Noren(this.textures));
+    if (this.weather.rain) {
+      this.animate(new RoofDrips(this.random));
+    }
+    this.animate(new SideBlinds(this.textures));
+    this.buildLife();
+    DioramaScene.LANTERNS.forEach(({ anchor, glyph, phase, at }) => {
+      const lantern = this.glow(
+        this.animate(new Lantern(this.materials, this.textures, anchor, glyph, phase)),
+      );
+      this.feed(lantern, at, PowerMode.Fade);
+    });
+  }
+
+  /**
+   * Vida dentro del puesto: cocina humeante, cocinero, comensal y guirnalda de bombillos.
+   */
+  private buildLife(): void {
+    this.animate(new KitchenProps(this.materials, this.random));
+    this.animate(new Chef());
+    this.animate(new Juan());
+    this.feed(
+      this.glow(this.animate(new StringLights(this.materials))),
+      DioramaScene.TIMELINE.interior,
+      PowerMode.Fade,
+    );
+  }
+
+  /**
+   * Letreros de neón y objetos sobre la barra: ramen y gato de la suerte.
+   */
+  private buildCounter(): void {
+    this.mainSign = this.glow(this.animate(this.createMainSign()));
+    this.feed(this.mainSign, DioramaScene.TIMELINE.mainSign, PowerMode.Strike);
+    this.feed(
+      this.glow(this.animate(this.createSideSign())),
+      DioramaScene.TIMELINE.sideSign,
+      PowerMode.Strike,
+    );
+    this.animate(new RamenBowl(this.textures, this.random));
+    this.animate(new ManekiNeko(this.textures));
+  }
+
+  /**
+   * Osciloscopio y placa del controlador con su motor y la sonda, en el banco del taller bajo la fuente.
+   */
+  private buildLab(): void {
+    const scope = this.workshop.placement(WorkshopLayout.SCOPE);
+    const oscilloscope = this.animate(
+      new Oscilloscope(this.materials, this.textures, this.instrument, scope),
+    );
+    this.oscilloscope = oscilloscope;
+    this.power(oscilloscope, DioramaScene.TIMELINE.electronics, PowerMode.Fade);
+    const plate = new CircuitBoard(
+      this.textures,
+      this.instrument.loop,
+      (target) => oscilloscope.probePort(target),
+      this.workshop.placement(WorkshopLayout.PLATE),
+    );
+    this.power(this.animate(plate), DioramaScene.TIMELINE.electronics, PowerMode.Fade);
+  }
+
+  /**
+   * Calle: poste con farola (detrás del MAIN del tablero), tablero de la trayectoria, máquina expendedora,
+   * cabina telefónica y semáforo de la esquina.
+   */
+  private buildStreet(): void {
+    const pole = this.glow(this.register(new UtilityPole(this.materials)));
+    const cone = this.register(new LightCone());
+    this.powerSteps.push({
+      target: this.grid.feed(new PowerGroup(pole, cone)),
+      at: DioramaScene.TIMELINE.street,
+      mode: PowerMode.Strike,
+    });
+    this.buildPanel();
+    this.vending = this.glow(this.animate(new VendingMachine(this.textures, DioramaScene.VENDING)));
+    this.power(this.vending, DioramaScene.TIMELINE.vending, PowerMode.Strike);
+    this.phoneBooth = this.glow(
+      this.animate(new PhoneBooth(this.materials, this.textures, PayPhoneService.KEYS)),
+    );
+    this.power(this.phoneBooth, DioramaScene.TIMELINE.phone, PowerMode.Strike);
+    this.buildSignal();
+  }
+
+  /**
+   * Semáforo de la esquina, con su aviso sonoro de cruce.
+   */
+  private buildSignal(): void {
+    const signal = this.glow(this.animate(new TrafficSignal(this.textures)));
+    const sound = new CrossingSound(this.audio);
+    signal.onChirp(() => {
+      sound.chirp();
+    });
+    this.feed(signal, DioramaScene.TIMELINE.signal, PowerMode.Strike);
+  }
+
+  /**
+   * Tablero de la trayectoria montado en el poste, con el medidor debajo.
+   */
+  private buildPanel(): void {
+    const ids = {
+      door: BreakerPanelService.DOOR,
+      main: BreakerPanelService.MAIN,
+      breaker: (index: number): string => BreakerPanelService.breakerId(index),
+    };
+    this.breakerPanel = this.animate(new BreakerPanel(this.textures, ids));
+    this.power(this.breakerPanel, DioramaScene.TIMELINE.street, PowerMode.Fade);
+  }
+
+  /**
+   * Taller de electrónica en el segundo piso del ramen: la base sobre el techo, la escalera, el local, su
+   * letrero, el banco de pruebas de los proyectos y el osciloscopio con la placa del PID.
+   */
+  private buildWorkshop(): void {
+    const first = this.objects.length;
+    this.buildShop();
+    this.buildLab();
+    this.buildDevices();
+    this.buildSolar();
+    this.workshopObjects = this.objects.slice(first);
+  }
+
+  /**
+   * El local del taller: la base sobre el techo, la escalera, el local, su letrero y el banco de los proyectos.
+   */
+  private buildShop(): void {
+    const { workshop, workshopSign } = DioramaScene.TIMELINE;
+    this.register(new ShopPlinth(this.materials));
+    this.register(new ShopStairs());
+    this.power(new RepairShop(this.materials, this.textures), workshop, PowerMode.Fade);
+    this.power(this.glow(this.animate(this.createWorkshopSign())), workshopSign, PowerMode.Strike);
+    const ids = {
+      supply: WorkbenchService.SUPPLY,
+      lamp: WorkbenchService.LAMP,
+      board: (index: number): string => WorkbenchService.boardId(index),
+    };
+    this.workbench = this.animate(new Workbench(this.materials, this.textures, ids));
+    this.power(this.workbench, workshop, PowerMode.Fade);
+  }
+
+  /**
+   * Respaldo solar del taller: paneles en el techo y controlador con baterías, que se entera cuando la red de
+   * la calle se corta (el MAIN del poste) y pasa al inversor.
+   */
+  private buildSolar(): void {
+    this.register(new SolarArray(this.materials, this.textures));
+    const controller = this.animate(new SolarController(this.materials, this.textures));
+    this.power(controller, DioramaScene.TIMELINE.workshop, PowerMode.Fade);
+    this.grid.onChange((closed) => {
+      controller.setGrid(closed);
+    });
+  }
+
+  /**
+   * Equipos interactivos del catálogo del taller, que se encienden junto con el local.
+   */
+  private buildDevices(): void {
+    const context = {
+      materials: this.materials,
+      textures: this.textures,
+      layout: this.workshop,
+      audio: this.audio,
+      random: this.random,
+    };
+    this.workshopDevices = new WorkshopCatalog().create(context);
+    this.workshopDevices.forEach((device) => {
+      this.power(this.animate(device.piece), DioramaScene.TIMELINE.workshop, PowerMode.Fade);
+    });
+  }
+
+  /**
+   * Marcadores de los puntos interactivos, dibujados todos juntos.
+   *
+   * @param camera Cámara principal.
+   */
+  private buildMarkers(camera: Camera): void {
+    DioramaScene.HOTSPOTS.forEach((hotspot, index) => {
+      const marker = this.animate(new HotspotMarker(hotspot));
+      this.markers.push(marker);
+      const { markers, markerStagger } = DioramaScene.TIMELINE;
+      this.power(marker, markers + index * markerStagger, PowerMode.Fade);
+    });
+    this.markerSet = new HotspotMarkers(this.markers, camera);
+    this.updatables.push(this.markerSet);
+  }
+
+  /**
+   * Letrero principal de neón sobre el techo.
+   *
+   * @returns Letrero.
+   */
+  private createMainSign(): NeonSign {
+    const { width, height, x, y, z, size, light } = DioramaScene.MAIN_SIGN;
+    return new NeonSign(this.textures, {
+      lines: [{ text: 'ラーメン', size, font: CanvasTextureFactory.JAPANESE_FONT }],
+      color: '#ff2d78',
+      lightColor: 0xff2d78,
+      size: { width, height },
+      position: { x, y, z },
+      rotationY: 0,
+      lightIntensity: light,
+    });
+  }
+
+  /**
+   * Letrero lateral en inglés, en cian para contrastar con el magenta.
+   *
+   * @returns Letrero.
+   */
+  private createSideSign(): NeonSign {
+    const { width, height, x, y, z, rotation, light } = DioramaScene.SIDE_SIGN;
+    return new NeonSign(this.textures, {
+      lines: [
+        { text: 'RAMEN', size: 78, font: CanvasTextureFactory.MONO_FONT },
+        { text: '& CIRCUITS', size: 44, font: CanvasTextureFactory.MONO_FONT },
+      ],
+      color: '#3fd8ff',
+      lightColor: 0x3fd8ff,
+      size: { width, height },
+      position: { x, y, z },
+      rotationY: rotation,
+      lightIntensity: light,
+    });
+  }
+
+  /**
+   * Letrero del taller sobre el alero: "電子部品" (componentes electrónicos) en verde de traza de osciloscopio.
+   *
+   * @returns Letrero.
+   */
+  private createWorkshopSign(): NeonSign {
+    const { width, height, ...local } = DioramaScene.WORKSHOP_SIGN;
+    return new NeonSign(this.textures, {
+      lines: [
+        { text: '電子部品', size: 58, font: CanvasTextureFactory.JAPANESE_FONT },
+        { text: 'REPAIR · LAB', size: 26, font: CanvasTextureFactory.MONO_FONT },
+      ],
+      color: '#4dffa0',
+      lightColor: 0x4dffa0,
+      size: { width, height },
+      position: this.workshop.world(local),
+      rotationY: WorkshopLayout.ROTATION_Y,
+      lightIntensity: 0,
+    });
+  }
+
+  /**
+   * Registra una pieza estática.
+   *
+   * @param object Pieza.
+   * @returns La misma pieza.
+   */
+  private register<T extends SceneObject>(object: T): T {
+    this.objects.push(object);
+    return object;
+  }
+
+  /**
+   * Marca una pieza luminosa para que aparezca en los reflejos de los charcos.
+   *
+   * @param object Pieza luminosa.
+   * @returns La misma pieza.
+   */
+  private glow<T extends SceneObject>(object: T): T {
+    this.luminous.push(object);
+    return object;
+  }
+
+  /**
+   * Registra una pieza animada.
+   *
+   * @param object Pieza que se actualiza por frame.
+   * @returns La misma pieza.
+   */
+  private animate<T extends SceneObject & Updatable>(object: T): T {
+    this.pieces.push(object);
+    return this.register(object);
+  }
+
+  /**
+   * Registra una pieza en la secuencia de encendido (y en la escena si aún no lo está).
+   *
+   * @param object Pieza encendible.
+   * @param at Segundo de la intro.
+   * @param mode Forma de encendido.
+   */
+  private power(
+    object: SceneObject & { setPower: (level: number) => void },
+    at: number,
+    mode: PowerMode,
+  ): void {
+    if (!this.objects.includes(object)) {
+      this.register(object);
+    }
+    this.powerSteps.push({ target: object, at, mode });
+  }
+
+  /**
+   * Registra una pieza que cuelga de la red de la calle: se enciende en la intro a través de su línea y se apaga
+   * cuando el MAIN del poste corta la red.
+   *
+   * @param object Pieza encendible.
+   * @param at Segundo de la intro.
+   * @param mode Forma de encendido.
+   */
+  private feed(object: SceneObject & Powerable, at: number, mode: PowerMode): void {
+    if (!this.objects.includes(object)) {
+      this.register(object);
+    }
+    this.powerSteps.push({ target: this.grid.feed(object), at, mode });
+  }
+
+  /**
+   * Parada del recorrido de una sección (el hero es la parada 0).
+   *
+   * @param sectionId Id de la sección.
+   * @returns Índice de la parada.
+   */
+  private static stopOf(sectionId: string): number {
+    return DioramaScene.HOTSPOTS.findIndex((hotspot) => hotspot.sectionId === sectionId) + 1;
+  }
+}

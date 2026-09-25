@@ -1,0 +1,161 @@
+@use '../abstracts' as *;
+
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: $z-boot;
+  display: grid;
+  place-items: center;
+  padding: $space-md;
+  background: radial-gradient(ellipse at center, #06110b 0%, #000 75%);
+  transition:
+    opacity 0.7s ease,
+    visibility 0.7s ease,
+    filter 0.7s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+    pointer-events: none;
+  }
+
+  &--hidden {
+    opacity: 0;
+    visibility: hidden;
+    filter: brightness(2.2) blur(2px);
+  }
+}
+
+.console {
+  width: min(46rem, 100%);
+  overflow: hidden;
+  border: 1px solid rgba($color-terminal, 0.28);
+  border-radius: 10px;
+  background: rgba(3, 10, 6, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    0 30px 90px rgba(0, 0, 0, 0.8),
+    0 0 60px rgba($color-terminal, 0.08);
+  animation: console-open 0.5s $ease-out both;
+
+  &__titlebar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border-bottom: 1px solid rgba($color-terminal, 0.14);
+    background: linear-gradient(#141a16, #0c110e);
+  }
+
+  &__dots {
+    position: absolute;
+    left: 12px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff5f57;
+    box-shadow:
+      16px 0 0 #febc2e,
+      32px 0 0 #28c840;
+  }
+
+  &__title {
+    color: rgba($color-text, 0.55);
+    font-family: $font-mono;
+    font-size: 0.72rem;
+  }
+
+  &__screen {
+    min-height: 19rem;
+    padding: $space-md $space-md $space-lg;
+    color: $color-terminal;
+    font-family: $font-mono;
+    font-size: clamp(0.68rem, 2.4vw, 0.85rem);
+    line-height: 1.65;
+    text-shadow: 0 0 6px rgba($color-terminal, 0.55);
+    animation: console-flicker 4s steps(1) infinite;
+  }
+
+  &__line {
+    white-space: pre-wrap;
+    word-break: break-word;
+
+    &--dim {
+      color: rgba($color-terminal, 0.6);
+    }
+  }
+
+  &__prompt {
+    color: #7fd7ff;
+    text-shadow: 0 0 6px rgba(#7fd7ff, 0.5);
+  }
+
+  &__cursor {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.1em;
+    margin-left: 1px;
+    vertical-align: text-bottom;
+    background: $color-terminal;
+    box-shadow: 0 0 8px $color-terminal;
+    animation: console-cursor 1s steps(1) infinite;
+  }
+
+  &__status {
+    white-space: pre;
+
+    &--ok {
+      color: #3dff8a;
+    }
+
+    &--info {
+      color: $color-lantern;
+      text-shadow: 0 0 6px rgba($color-lantern, 0.5);
+    }
+  }
+
+  @include reduced-motion {
+    animation: none;
+
+    &__screen,
+    &__cursor {
+      animation: none;
+    }
+  }
+}
+
+@keyframes console-open {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes console-cursor {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes console-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  47% {
+    opacity: 0.94;
+  }
+
+  48% {
+    opacity: 1;
+  }
+}

@@ -1,0 +1,126 @@
+@use '../abstracts' as *;
+
+.hero {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: $space-lg $space-md $space-xl * 1.5;
+
+  &__content {
+    display: grid;
+    gap: $space-sm;
+    max-width: 38rem;
+
+    > * {
+      opacity: 0;
+      filter: blur(12px);
+      transform: translateY(24px);
+      transition:
+        opacity 1.2s $ease-out,
+        filter 1.2s $ease-out,
+        transform 1.2s $ease-out;
+    }
+  }
+
+  &__role {
+    color: $color-cyan;
+    font-family: $font-mono;
+    font-size: 0.8rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    text-shadow: 0 0 12px rgba($color-cyan, 0.6);
+  }
+
+  &__title {
+    font-size: clamp(2.8rem, 9vw, 6.5rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 0.95;
+    text-shadow: 0 4px 40px rgba(0, 0, 0, 0.6);
+  }
+
+  &__headline {
+    max-width: 32ch;
+    color: $color-text;
+    font-size: clamp(1.05rem, 2.2vw, 1.35rem);
+    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+  }
+
+  &__experience {
+    color: $color-neon;
+    font-family: $font-mono;
+    font-size: 0.85rem;
+    text-shadow: 0 0 14px rgba($color-neon, 0.6);
+  }
+
+  &__cue {
+    position: absolute;
+    right: $space-md;
+    bottom: $space-xl;
+    color: $color-muted;
+    font-family: $font-mono;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+    opacity: 0;
+    transition: opacity 1s ease 2s;
+
+    &::after {
+      content: '';
+      display: block;
+      width: 1px;
+      height: 3rem;
+      margin: $space-sm auto 0;
+      background: linear-gradient($color-muted, transparent);
+      animation: hero-cue 2s ease-in-out infinite;
+    }
+  }
+
+  &--visible {
+    .hero__content > * {
+      opacity: 1;
+      filter: blur(0);
+      transform: none;
+
+      @for $index from 1 through 4 {
+        &:nth-child(#{$index}) {
+          transition-delay: #{$index * 0.15}s;
+        }
+      }
+    }
+
+    .hero__cue {
+      opacity: 1;
+    }
+  }
+
+  @include from('md') {
+    padding: $space-xl $space-xl $space-xl * 1.5;
+
+    &__cue {
+      right: $space-xl;
+    }
+  }
+
+  @include reduced-motion {
+    &__content > * {
+      filter: none;
+      transform: none;
+    }
+  }
+}
+
+@keyframes hero-cue {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+    transform-origin: top;
+  }
+
+  50% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+}
