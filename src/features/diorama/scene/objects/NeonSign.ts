@@ -1,6 +1,7 @@
-import { AdditiveBlending, Mesh, MeshBasicMaterial, PlaneGeometry, PointLight } from 'three';
+import { AdditiveBlending, Mesh, MeshBasicMaterial, NormalBlending, PlaneGeometry, PointLight } from 'three';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { DaylightAware } from '../../models/DaylightAware';
 import type { Powerable } from '../../models/Powerable';
 import type { CanvasTextureFactory } from '../CanvasTextureFactory';
 import type { NeonSignOptions } from './NeonSignOptions';
@@ -9,7 +10,7 @@ import type { NeonSignOptions } from './NeonSignOptions';
  * Letrero de neón. El brillo supera el umbral del bloom y proyecta luz de color sobre el asfalto mojado.
  * Una vez encendido, parpadea de vez en cuando como un tubo real con el balastro gastado.
  */
-export class NeonSign extends SceneObject implements Updatable, Powerable {
+export class NeonSign extends SceneObject implements Updatable, Powerable, DaylightAware {
   private static readonly GLOW = 6;
   private static readonly OFF_GLOW = 0.04;
   private static readonly PIXELS_PER_METER = 360;
@@ -17,6 +18,7 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
   private static readonly TUBE = { glow: 26, core: '#fff4fa', lineWidth: 5 };
   private static readonly LIGHT_OFFSET = 0.55;
   private static readonly EDGE_FADE = 0.16;
+  private static readonly DAY_SWAP = 0.5;
 
   private readonly material = new MeshBasicMaterial({
     transparent: true,
@@ -48,6 +50,17 @@ export class NeonSign extends SceneObject implements Updatable, Powerable {
   public setPower(level: number): void {
     this.level = level;
     this.apply(level);
+  }
+
+  /**
+   * De noche el tubo suma su luz a lo que hay detrás; de día, sobre el cielo claro, sumar luz lo deja lavado
+   * como un fantasma, así que se dibuja encima como el vidrio de color que es. Solo cambia la mezcla (estado de
+   * la GPU): no recompila el shader.
+   *
+   * @param level Momento del día (0 = noche, 1 = día).
+   */
+  public setDaylight(level: number): void {
+    this.material.blending = level < NeonSign.DAY_SWAP ? AdditiveBlending : NormalBlending;
   }
 
   /**

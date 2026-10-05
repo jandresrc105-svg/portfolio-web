@@ -1,0 +1,13 @@
+@use '../abstracts' as *;
+
+:root {
+  @include palette($palette-dark, $glass-dark);
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  @include palette($palette-light, $glass-light);
+
+  color-scheme: light;
+}

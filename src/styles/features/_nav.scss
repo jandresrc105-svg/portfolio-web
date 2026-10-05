@@ -32,6 +32,7 @@
     font-size: 0.68rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+    text-shadow: 0 0 10px tint('shade', 0.9);
     cursor: pointer;
 
     &:hover,
@@ -60,7 +61,7 @@
       .section-nav__dot {
         border-color: $color-cyan;
         background: $color-cyan;
-        box-shadow: 0 0 12px rgba($color-cyan, 0.8);
+        box-shadow: 0 0 12px tint('cyan', 0.8);
         transform: scale(1.25);
       }
     }
@@ -78,9 +79,9 @@
   &__dot {
     width: 10px;
     height: 10px;
-    border: 1px solid rgba($color-text, 0.4);
+    border: 1px solid tint('text', 0.4);
     border-radius: $radius-pill;
-    background: rgba($color-night, 0.6);
+    background: tint('night', 0.6);
     transition:
       background 0.3s ease,
       border-color 0.3s ease,
@@ -97,6 +98,7 @@
     letter-spacing: 0.08em;
     text-align: right;
     text-transform: uppercase;
+    text-shadow: 0 0 10px tint('shade', 0.9);
     opacity: 0.7;
   }
 

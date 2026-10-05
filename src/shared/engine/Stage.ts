@@ -13,6 +13,7 @@ import {
   type Object3D,
 } from 'three';
 import { FrameStats } from './FrameStats';
+import type { LensSettings } from './LensSettings';
 import { PoseCheck } from './PoseCheck';
 import { PostProcessing } from './PostProcessing';
 import { ProgramSort } from './ProgramSort';
@@ -38,7 +39,7 @@ export class Stage {
   private readonly compileTarget = new WebGLRenderTarget(1, 1, { type: HalfFloatType });
   private size = { width: 1, height: 1 };
   private resolutionScale = 1;
-  private environment: WebGLRenderTarget | null = null;
+  private readonly environments: WebGLRenderTarget[] = [];
   private beforeRender: (() => void) | null = null;
 
   /**
@@ -103,19 +104,40 @@ export class Stage {
   }
 
   /**
-   * Hornea una escena de referencia como mapa de entorno prefiltrado (PMREM). Una sola vez al inicio:
-   * da reflejos de color a metales, vidrio y asfalto mojado sin costo por frame.
+   * Hornea una escena de referencia como mapa de entorno prefiltrado (PMREM), una vez al inicio: da reflejos
+   * de color a metales, vidrio y asfalto mojado sin costo por frame. Se pueden hornear varios (p. ej. el de la
+   * noche y el del día) y cambiar entre ellos con {@link Stage.setEnvironment}: todos salen del mismo tamaño,
+   * así que cambiar no recompila shaders.
    *
    * @param source Escena de referencia (normalmente fuentes de luz emisivas alrededor).
+   * @returns Mapa de entorno horneado (se libera con el escenario).
+   */
+  public bakeEnvironment(source: Scene): Texture {
+    const generator = new PMREMGenerator(this.renderer);
+    const target = generator.fromScene(source, Stage.ENVIRONMENT_BLUR);
+    generator.dispose();
+    this.environments.push(target);
+    return target.texture;
+  }
+
+  /**
+   * Usa un mapa de entorno ya horneado.
+   *
+   * @param texture Mapa de entorno.
    * @param intensity Intensidad del entorno sobre los materiales PBR.
    */
-  public bakeEnvironment(source: Scene, intensity: number): void {
-    const generator = new PMREMGenerator(this.renderer);
-    this.environment?.dispose();
-    this.environment = generator.fromScene(source, Stage.ENVIRONMENT_BLUR);
-    generator.dispose();
-    this.scene.environment = this.environment.texture;
+  public setEnvironment(texture: Texture, intensity: number): void {
+    this.scene.environment = texture;
     this.scene.environmentIntensity = intensity;
+  }
+
+  /**
+   * Cambia el bloom y la viñeta en vivo.
+   *
+   * @param lens Ajustes.
+   */
+  public setLens(lens: LensSettings): void {
+    this.post.setLens(lens);
   }
 
   /**
@@ -194,7 +216,9 @@ export class Stage {
    * Libera los recursos de GPU del escenario.
    */
   public dispose(): void {
-    this.environment?.dispose();
+    this.environments.forEach((target) => {
+      target.dispose();
+    });
     this.compileTarget.dispose();
     this.post.dispose();
     this.renderer.dispose();

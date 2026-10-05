@@ -1,0 +1,7 @@
+/// Color del tema con transparencia (el color sale de la paleta vigente, clara u oscura).
+/// @param {String} $name Nombre del color en la paleta (`cyan`, `text`, `shade`…).
+/// @param {Number} $alpha Opacidad.
+/// @return {String} Color CSS.
+@function tint($name, $alpha) {
+  @return rgb(var(--color-#{$name}-rgb) / #{$alpha});
+}

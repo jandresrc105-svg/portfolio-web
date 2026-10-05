@@ -8,6 +8,8 @@ import type { FeatureModule } from './core/di/FeatureModule';
 import { AppEventBus } from './core/events/AppEventBus';
 import { SectionNavigator } from './core/navigation/SectionNavigator';
 import { QualityDetector } from './engine/QualityDetector';
+import { ThemeService } from './theme/ThemeService';
+import { ThemeStore } from './theme/ThemeStore';
 
 /**
  * Registra las dependencias compartidas por todas las features.
@@ -24,6 +26,7 @@ export class SharedModule implements FeatureModule {
       .singleton(SectionNavigator, () => new SectionNavigator())
       .singleton(QualityDetector, () => new QualityDetector())
       .singleton(AudioEngine, () => new AudioEngine())
+      .singleton(ThemeService, () => new ThemeService(new ThemeStore()))
       .singleton(PidSimulator, () => new PidSimulator())
       .singleton(PidLoopService, (c) => new PidLoopService(c.resolve(PidSimulator)));
   }

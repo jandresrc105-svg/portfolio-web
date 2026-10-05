@@ -1,5 +1,6 @@
 import type { AudioEngine } from '@shared/audio/AudioEngine';
 import type { QualityDetector } from '@shared/engine/QualityDetector';
+import type { ThemeService } from '@shared/theme/ThemeService';
 import { Soundscape } from '../audio/Soundscape';
 import type { Weather } from '../models/Weather';
 import type { DioramaDevices } from '../models/DioramaDevices';
@@ -30,11 +31,13 @@ export class DioramaExperienceFactory {
    * @param quality Detector de capacidad del dispositivo.
    * @param devices Osciloscopio y teléfono que el visitante usa.
    * @param audio Motor de audio compartido.
+   * @param theme Apariencia de la página (la escena sigue si es de día o de noche).
    */
   public constructor(
     private readonly quality: QualityDetector,
     private readonly devices: DioramaDevices,
     private readonly audio: AudioEngine,
+    private readonly theme: ThemeService,
   ) {}
 
   /**
@@ -83,6 +86,7 @@ export class DioramaExperienceFactory {
   public create(canvas: HTMLCanvasElement): DioramaExperience {
     const weather = DioramaExperienceFactory.WEATHER;
     const sound = new Soundscape(this.audio, weather.rain);
-    return new DioramaExperience(canvas, this.quality.detect(), this.devices, sound, weather);
+    const { devices, theme } = this;
+    return new DioramaExperience(canvas, { quality: this.quality.detect(), devices, sound, weather, theme });
   }
 }

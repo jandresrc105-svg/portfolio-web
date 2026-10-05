@@ -29,7 +29,7 @@
     font-size: 0.8rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    text-shadow: 0 0 12px rgba($color-cyan, 0.6);
+    text-shadow: 0 0 12px tint('cyan', 0.6);
   }
 
   &__title {
@@ -37,21 +37,21 @@
     font-weight: 800;
     letter-spacing: -0.04em;
     line-height: 0.95;
-    text-shadow: 0 4px 40px rgba(0, 0, 0, 0.6);
+    text-shadow: 0 4px 40px tint('shade', 0.6);
   }
 
   &__headline {
     max-width: 32ch;
     color: $color-text;
     font-size: clamp(1.05rem, 2.2vw, 1.35rem);
-    text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+    text-shadow: 0 2px 20px tint('shade', 0.8);
   }
 
   &__experience {
     color: $color-neon;
     font-family: $font-mono;
     font-size: 0.85rem;
-    text-shadow: 0 0 14px rgba($color-neon, 0.6);
+    text-shadow: 0 0 14px tint('neon', 0.6);
   }
 
   &__cue {

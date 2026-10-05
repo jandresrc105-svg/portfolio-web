@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { Vector3 } from 'three';
+import { Vector3, type Texture } from 'three';
 import type { ContactChannel } from '@shared/core/events/ContactChannel';
 import { SeededRandom } from '@shared/core/math/SeededRandom';
 import { AdaptiveResolution } from '@shared/engine/AdaptiveResolution';
@@ -10,27 +10,30 @@ import { RenderGate } from '@shared/engine/RenderGate';
 import { PointerPicker } from '@shared/engine/PointerPicker';
 import { RenderLayer } from '@shared/engine/RenderLayer';
 import type { PerfSnapshot } from '@shared/engine/PerfSnapshot';
-import type { QualityProfile } from '@shared/engine/QualityProfile';
 import { RenderLoop } from '@shared/engine/RenderLoop';
 import { Stage } from '@shared/engine/Stage';
 import { UpdateScheduler } from '@shared/engine/UpdateScheduler';
+import type { ThemeService } from '@shared/theme/ThemeService';
 import { AudibleSwitch } from '../audio/AudibleSwitch';
 import type { Soundscape } from '../audio/Soundscape';
 import { CameraDirector } from '../camera/CameraDirector';
 import { PowerOnSequence } from '../intro/PowerOnSequence';
 import type { DeviceInteraction } from '../models/DeviceInteraction';
 import type { DioramaDevices } from '../models/DioramaDevices';
+import type { DioramaSetup } from '../models/DioramaSetup';
 import type { Hotspot } from '../models/Hotspot';
 import type { ScopeControlId } from '../models/ScopeControlId';
 import { PowerMode } from '../models/PowerMode';
 import type { PowerStep } from '../models/PowerStep';
-import type { Weather } from '../models/Weather';
 import { CanvasTextureFactory } from '../scene/CanvasTextureFactory';
 import { DioramaScene } from '../scene/DioramaScene';
 import { MaterialLibrary } from '../scene/MaterialLibrary';
+import { DayEnvironment } from '../scene/DayEnvironment';
+import type { EnvironmentRoom } from '../scene/EnvironmentRoom';
 import { NeonEnvironment } from '../scene/NeonEnvironment';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
 import { BenchInteraction } from './BenchInteraction';
+import { DaylightDirector } from './DaylightDirector';
 import { WorkshopInteraction } from './WorkshopInteraction';
 import { ZoneProxies } from './ZoneProxies';
 import { PanelInteraction } from './PanelInteraction';
@@ -44,10 +47,12 @@ import { PhoneInteraction } from './PhoneInteraction';
  */
 export class DioramaExperience {
   private static readonly SEED = 20240601;
-  private static readonly ENVIRONMENT_INTENSITY = 0.5;
   private static readonly ZONES = { street: 'street', workshop: 'workshop' };
   private static readonly TRAVEL_SECONDS = 1.7;
 
+  private readonly devices: DioramaDevices;
+  private readonly sound: Soundscape;
+  private readonly theme: ThemeService;
   private readonly stage: Stage;
   private readonly diorama: DioramaScene;
   private readonly director: CameraDirector;
@@ -59,6 +64,8 @@ export class DioramaExperience {
   private readonly culler: DetailCuller;
   private readonly gate = new RenderGate();
   private proxy: ZoneProxies | null = null;
+  private daylight: DaylightDirector | null = null;
+  private unsubscribeTheme: (() => void) | null = null;
   private lights: LightZones | null = null;
   private lightsCall: gsap.core.Tween | null = null;
   private lastStop = 0;
@@ -78,18 +85,13 @@ export class DioramaExperience {
    * Crea la experiencia sobre un canvas.
    *
    * @param canvas Canvas donde se dibuja.
-   * @param quality Perfil de calidad.
-   * @param devices Osciloscopio y teléfono que el visitante usa.
-   * @param sound Paisaje sonoro.
-   * @param weather Clima de la escena.
+   * @param setup Calidad, equipos que el visitante usa, paisaje sonoro, clima y apariencia.
    */
-  public constructor(
-    canvas: HTMLCanvasElement,
-    quality: QualityProfile,
-    private readonly devices: DioramaDevices,
-    private readonly sound: Soundscape,
-    weather: Weather,
-  ) {
+  public constructor(canvas: HTMLCanvasElement, setup: DioramaSetup) {
+    const { quality, devices, sound, weather } = setup;
+    this.devices = devices;
+    this.sound = sound;
+    this.theme = setup.theme;
     const { instrument } = devices;
     const random = new SeededRandom(DioramaExperience.SEED);
     this.stage = new Stage(canvas, quality);
@@ -141,7 +143,7 @@ export class DioramaExperience {
    */
   public async prepare(width: number, height: number): Promise<void> {
     this.diorama.build(this.stage.scene, this.stage.camera);
-    this.bakeEnvironment();
+    this.bakeEnvironments();
     this.diorama.markers.forEach((marker) => {
       this.picker.register(marker.hitArea, marker);
     });
@@ -427,6 +429,8 @@ export class DioramaExperience {
    * Detiene el bucle y libera la GPU y el audio.
    */
   public dispose(): void {
+    this.unsubscribeTheme?.();
+    this.daylight?.dispose();
     this.loop.stop();
     this.stations.forEach(({ device }) => {
       device.dispose();
@@ -610,12 +614,24 @@ export class DioramaExperience {
   }
 
   /**
-   * Hornea los reflejos de neón del entorno y libera la escena de referencia.
+   * Hornea los mapas de entorno de la noche (reflejos de neón) y del día (cielo y sol), y sigue a la apariencia
+   * de la página: la escena arranca en el momento vigente y cambia con un amanecer o un atardecer.
    */
-  private bakeEnvironment(): void {
-    const environment = new NeonEnvironment();
-    this.stage.bakeEnvironment(environment.create(), DioramaExperience.ENVIRONMENT_INTENSITY);
-    environment.dispose();
+  private bakeEnvironments(): void {
+    const environments = {
+      night: DioramaExperience.bake(this.stage, new NeonEnvironment()),
+      day: DioramaExperience.bake(this.stage, new DayEnvironment()),
+    };
+    const wake = (): void => {
+      this.loop.wake();
+    };
+    const daylight = new DaylightDirector(this.stage, environments, this.diorama.daylit, wake);
+    this.daylight = daylight;
+    let first = true;
+    this.unsubscribeTheme = this.theme.onChange(({ day }) => {
+      daylight.show(day, first);
+      first = false;
+    });
   }
 
   /**
@@ -679,5 +695,18 @@ export class DioramaExperience {
     }
     const hit = this.picker.cast(this.stage.camera, cans);
     return hit?.instanceId === undefined ? null : vending.itemAt(hit.instanceId);
+  }
+
+  /**
+   * Hornea un mapa de entorno y libera su escena de referencia.
+   *
+   * @param stage Escenario.
+   * @param room Escena de referencia.
+   * @returns Mapa de entorno.
+   */
+  private static bake(stage: Stage, room: EnvironmentRoom): Texture {
+    const texture = stage.bakeEnvironment(room.create());
+    room.dispose();
+    return texture;
   }
 }

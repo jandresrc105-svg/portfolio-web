@@ -4,7 +4,7 @@
   position: fixed;
   inset: 0;
   z-index: $z-scene;
-  background: radial-gradient(ellipse at 50% 70%, #151a33 0%, $color-night 70%);
+  background: radial-gradient(ellipse at 50% 70%, $color-depth 0%, $color-night 70%);
 
   &__canvas {
     width: 100%;
@@ -30,9 +30,9 @@
     left: 0;
     z-index: $z-tooltip;
     padding: $space-xs $space-sm;
-    border: 1px solid rgba($color-cyan, 0.5);
+    border: 1px solid tint('cyan', 0.5);
     border-radius: $radius-pill;
-    background: rgba($color-night, 0.8);
+    background: tint('night', 0.8);
     color: $color-cyan;
     font-family: $font-mono;
     font-size: 0.8rem;
@@ -57,6 +57,7 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     white-space: nowrap;
+    text-shadow: 0 0 10px tint('shade', 0.9);
     opacity: 0;
     transform: translate(-50%, 10px);
     transition:
@@ -71,8 +72,8 @@
 
   &--fallback {
     background:
-      radial-gradient(circle at 70% 30%, rgba($color-neon, 0.25), transparent 45%),
-      radial-gradient(circle at 25% 75%, rgba($color-cyan, 0.18), transparent 45%), $color-night;
+      radial-gradient(circle at 70% 30%, tint('neon', 0.25), transparent 45%),
+      radial-gradient(circle at 25% 75%, tint('cyan', 0.18), transparent 45%), $color-night;
 
     .diorama__canvas {
       display: none;

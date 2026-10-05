@@ -4,6 +4,7 @@ import type { SeededRandom } from '@shared/core/math/SeededRandom';
 import type { QualityProfile } from '@shared/engine/QualityProfile';
 import type { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { DaylightAware } from '../models/DaylightAware';
 import type { Hotspot } from '../models/Hotspot';
 import { CrossingSound } from '../audio/CrossingSound';
 import { PowerMode } from '../models/PowerMode';
@@ -37,7 +38,6 @@ import { KitchenProps } from './objects/KitchenProps';
 import { Lantern } from './objects/Lantern';
 import { LightCone } from './objects/LightCone';
 import { ManekiNeko } from './objects/ManekiNeko';
-import { Moonlight } from './objects/Moonlight';
 import { NeonSign } from './objects/NeonSign';
 import { Noren } from './objects/Noren';
 import { Oscilloscope } from './objects/Oscilloscope';
@@ -50,6 +50,7 @@ import { RoofDrips } from './objects/RoofDrips';
 import { Sidewalk } from './objects/Sidewalk';
 import { SideBlinds } from './objects/SideBlinds';
 import { SkyDome } from './objects/SkyDome';
+import { SkyLight } from './objects/SkyLight';
 import { Stall } from './objects/Stall';
 import { StallInterior } from './objects/StallInterior';
 import { StreetMarkings } from './objects/StreetMarkings';
@@ -129,6 +130,7 @@ export class DioramaScene {
   public readonly pieces: (SceneObject & Updatable)[] = [];
   public readonly powerSteps: PowerStep[] = [];
   public readonly markers: HotspotMarker[] = [];
+  public readonly daylit: DaylightAware[] = [];
   public storm: Storm | null = null;
   public mainSign: NeonSign | null = null;
   public puddles: Puddles | null = null;
@@ -316,19 +318,20 @@ export class DioramaScene {
   }
 
   /**
-   * Luna y fondo oscuro; según el clima, también el cielo con nubes, la ciudad y la tormenta que los ilumina.
+   * Cielo (luna o sol, según la hora); según el clima, también el cielo con nubes, la ciudad y la tormenta que los ilumina.
    *
    * @param scene Escena (para fondo y niebla).
    */
   private buildSky(scene: Scene): void {
-    const moonlight = this.register(new Moonlight(scene, this.weather.fog));
+    const sky = this.register(new SkyLight(scene, this.weather.fog));
+    this.daylit.push(sky);
     if (!this.weather.backdrop) {
       return;
     }
-    const sky = this.animate(new SkyDome());
+    const dome = this.animate(new SkyDome());
     const city = this.register(new CitySkyline(this.quality.buildings, this.random));
     if (this.weather.storm) {
-      this.storm = new Storm(moonlight.moon, sky, city, this.random);
+      this.storm = new Storm(sky.moon, dome, city, this.random);
       this.updatables.push(this.storm);
       this.powerSteps.push({ target: this.storm, at: DioramaScene.TIMELINE.markers, mode: PowerMode.Fade });
     }
@@ -398,11 +401,9 @@ export class DioramaScene {
   private buildCounter(): void {
     this.mainSign = this.glow(this.animate(this.createMainSign()));
     this.feed(this.mainSign, DioramaScene.TIMELINE.mainSign, PowerMode.Strike);
-    this.feed(
-      this.glow(this.animate(this.createSideSign())),
-      DioramaScene.TIMELINE.sideSign,
-      PowerMode.Strike,
-    );
+    const side = this.glow(this.animate(this.createSideSign()));
+    this.feed(side, DioramaScene.TIMELINE.sideSign, PowerMode.Strike);
+    this.daylit.push(this.mainSign, side);
     this.animate(new RamenBowl(this.textures, this.random));
     this.animate(new ManekiNeko(this.textures));
   }
@@ -432,7 +433,9 @@ export class DioramaScene {
    */
   private buildStreet(): void {
     const pole = this.glow(this.register(new UtilityPole(this.materials)));
+    this.daylit.push(pole);
     const cone = this.register(new LightCone());
+    this.daylit.push(cone);
     this.powerSteps.push({
       target: this.grid.feed(new PowerGroup(pole, cone)),
       at: DioramaScene.TIMELINE.street,
@@ -494,7 +497,9 @@ export class DioramaScene {
     this.register(new ShopPlinth(this.materials));
     this.register(new ShopStairs());
     this.power(new RepairShop(this.materials, this.textures), workshop, PowerMode.Fade);
-    this.power(this.glow(this.animate(this.createWorkshopSign())), workshopSign, PowerMode.Strike);
+    const sign = this.glow(this.animate(this.createWorkshopSign()));
+    this.power(sign, workshopSign, PowerMode.Strike);
+    this.daylit.push(sign);
     const ids = {
       supply: WorkbenchService.SUPPLY,
       lamp: WorkbenchService.LAMP,

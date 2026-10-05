@@ -1,6 +1,8 @@
 @use '../abstracts' as *;
 
 .boot {
+  @include palette($palette-dark, $glass-dark);
+
   position: fixed;
   inset: 0;
   z-index: $z-boot;
@@ -31,13 +33,13 @@
 .console {
   width: min(46rem, 100%);
   overflow: hidden;
-  border: 1px solid rgba($color-terminal, 0.28);
+  border: 1px solid tint('terminal', 0.28);
   border-radius: 10px;
   background: rgba(3, 10, 6, 0.92);
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.6),
     0 30px 90px rgba(0, 0, 0, 0.8),
-    0 0 60px rgba($color-terminal, 0.08);
+    0 0 60px tint('terminal', 0.08);
   animation: console-open 0.5s $ease-out both;
 
   &__titlebar {
@@ -46,7 +48,7 @@
     align-items: center;
     justify-content: center;
     height: 30px;
-    border-bottom: 1px solid rgba($color-terminal, 0.14);
+    border-bottom: 1px solid tint('terminal', 0.14);
     background: linear-gradient(#141a16, #0c110e);
   }
 
@@ -63,7 +65,7 @@
   }
 
   &__title {
-    color: rgba($color-text, 0.55);
+    color: tint('text', 0.55);
     font-family: $font-mono;
     font-size: 0.72rem;
   }
@@ -75,7 +77,7 @@
     font-family: $font-mono;
     font-size: clamp(0.68rem, 2.4vw, 0.85rem);
     line-height: 1.65;
-    text-shadow: 0 0 6px rgba($color-terminal, 0.55);
+    text-shadow: 0 0 6px tint('terminal', 0.55);
     animation: console-flicker 4s steps(1) infinite;
   }
 
@@ -84,7 +86,7 @@
     word-break: break-word;
 
     &--dim {
-      color: rgba($color-terminal, 0.6);
+      color: tint('terminal', 0.6);
     }
   }
 
@@ -113,7 +115,7 @@
 
     &--info {
       color: $color-lantern;
-      text-shadow: 0 0 6px rgba($color-lantern, 0.5);
+      text-shadow: 0 0 6px tint('lantern', 0.5);
     }
   }
 

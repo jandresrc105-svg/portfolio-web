@@ -1,3 +1,4 @@
+@use 'sass:color';
 @use 'sass:map';
 @use 'tokens';
 
@@ -10,5 +11,21 @@
 @mixin reduced-motion {
   @media (prefers-reduced-motion: reduce) {
     @content;
+  }
+}
+
+/// Define las variables CSS de una paleta (cada color en hexadecimal y en canales para `tint`) y de su vidrio.
+/// @param {Map} $colors Paleta.
+/// @param {Map} $glass Vidrio de los paneles.
+@mixin palette($colors, $glass) {
+  @each $name, $value in $colors {
+    --color-#{$name}: #{$value};
+    --color-#{$name}-rgb: #{color.channel($value, 'red', $space: rgb)}
+      #{color.channel($value, 'green', $space: rgb)}
+      #{color.channel($value, 'blue', $space: rgb)};
+  }
+
+  @each $name, $value in $glass {
+    --glass-#{$name}: #{$value};
   }
 }

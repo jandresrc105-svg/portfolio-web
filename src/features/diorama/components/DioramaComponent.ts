@@ -52,7 +52,7 @@ export class DioramaComponent extends Component {
    * @param navigator Navegación entre secciones.
    * @param events Bus de eventos de la aplicación.
    * @param devices Equipos de la escena (el tablero del poste y el banco del taller hablan con las vitrinas).
-   * @param overlays Consola de arranque, botón de sonido y riel de secciones.
+   * @param overlays Consola de arranque, botones de sonido y de apariencia y riel de secciones.
    */
   public constructor(
     private readonly factory: DioramaExperienceFactory,
@@ -107,6 +107,7 @@ export class DioramaComponent extends Component {
    */
   protected override onMount(): void {
     this.mountChild(this.overlays.boot, document.body);
+    this.mountChild(this.overlays.themeToggle, document.body);
     if (new URLSearchParams(window.location.search).has(DioramaComponent.PERF_PARAM)) {
       this.overlays.perf.connect(() => this.experience?.perf ?? null);
       this.mountChild(this.overlays.perf, document.body);
@@ -281,11 +282,12 @@ export class DioramaComponent extends Component {
   }
 
   /**
-   * Muestra el botón de sonido y el riel, y avisa al resto de la app que la intro terminó.
+   * Muestra los botones de sonido y de apariencia y el riel, y avisa al resto de la app que la intro terminó.
    */
   private finish(): void {
     this.element.classList.add('diorama--ready');
     this.mountChild(this.overlays.soundToggle, document.body);
+    this.overlays.themeToggle.reveal();
     if (this.experience) {
       this.overlays.nav.setStops(this.experience.hotspots);
       this.mountChild(this.overlays.nav, document.body);

@@ -10,11 +10,13 @@ import {
   VignetteEffect,
 } from 'postprocessing';
 import { HalfFloatType, type Camera, type Scene, type WebGLRenderer } from 'three';
+import type { LensSettings } from './LensSettings';
 import type { QualityProfile } from './QualityProfile';
 
 /**
  * Cadena de post-procesado: bloom (solo lo que de verdad emite luz, como el neón), tone mapping ACES para
- * negros profundos y contraste limpio, y en una sola pasada antialiasing SMAA y una viñeta suave.
+ * negros profundos y contraste limpio, y en una sola pasada antialiasing SMAA y una viñeta suave (sin grano:
+ * la imagen queda limpia). El bloom y la viñeta se pueden ajustar en vivo ({@link PostProcessing.setLens}).
  * Se usa SMAA en lugar de MSAA porque en GPUs integradas el MSAA sobre buffers HDR puede costar la mitad
  * del frame. Un bloom con umbral bajo o un tone mapping plano (AgX) dejan la imagen empañada.
  */
@@ -23,6 +25,8 @@ export class PostProcessing {
   private static readonly VIGNETTE = { offset: 0.3, darkness: 0.62 };
 
   private readonly composer: EffectComposer;
+  private readonly bloom = PostProcessing.bloom();
+  private readonly vignette = new VignetteEffect(PostProcessing.VIGNETTE);
 
   /**
    * Crea la cadena de efectos.
@@ -39,14 +43,31 @@ export class PostProcessing {
     });
     this.composer.addPass(new RenderPass(scene, camera));
     this.composer.addPass(
-      new EffectPass(
-        camera,
-        PostProcessing.bloom(),
-        new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
-      ),
+      new EffectPass(camera, this.bloom, new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC })),
     );
     const antialias = quality.smaa ? [new SMAAEffect({ preset: SMAAPreset.MEDIUM })] : [];
-    this.composer.addPass(new EffectPass(camera, ...antialias, ...PostProcessing.lens()));
+    this.composer.addPass(new EffectPass(camera, ...antialias, this.vignette));
+  }
+
+  /**
+   * Ajustes de fábrica (los de la noche).
+   *
+   * @returns Bloom, umbral y viñeta.
+   */
+  public static get defaults(): LensSettings {
+    const { intensity, threshold } = PostProcessing.BLOOM;
+    return { bloom: intensity, threshold, vignette: PostProcessing.VIGNETTE.darkness };
+  }
+
+  /**
+   * Cambia el bloom y la viñeta en vivo (solo valores uniformes: no recompila shaders).
+   *
+   * @param lens Ajustes.
+   */
+  public setLens(lens: LensSettings): void {
+    this.bloom.intensity = lens.bloom;
+    this.bloom.luminanceMaterial.threshold = lens.threshold;
+    this.vignette.darkness = lens.vignette;
   }
 
   /**
@@ -87,15 +108,5 @@ export class PostProcessing {
       luminanceThreshold: threshold,
       luminanceSmoothing: smoothing,
     });
-  }
-
-  /**
-   * Efecto de lente aplicado después del tone mapping, en la misma pasada que el antialiasing. Sin grano:
-   * la imagen queda limpia.
-   *
-   * @returns Viñeta.
-   */
-  private static lens(): [VignetteEffect] {
-    return [new VignetteEffect(PostProcessing.VIGNETTE)];
   }
 }
