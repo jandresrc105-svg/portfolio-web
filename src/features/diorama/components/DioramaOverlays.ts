@@ -13,7 +13,7 @@ export interface DioramaOverlays {
   readonly boot: BootScreenComponent;
   /** Botón para activar o silenciar el sonido. */
   readonly soundToggle: SoundToggleComponent;
-  /** Selector de apariencia (claro, oscuro u hora local). */
+  /** Selector de apariencia (día, tarde, noche u hora local). */
   readonly themeToggle: ThemeToggleComponent;
   /** Riel de navegación entre secciones. */
   readonly nav: SectionNavComponent;

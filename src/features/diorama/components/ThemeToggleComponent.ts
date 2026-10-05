@@ -7,7 +7,7 @@ import type { ThemeState } from '@shared/theme/ThemeState';
 import { DaylightDirector } from '../experience/DaylightDirector';
 
 /**
- * Selector de apariencia: claro (el puesto de día), tarde (al atardecer), oscuro (de noche) u hora local
+ * Selector de apariencia: día (el puesto a pleno sol), tarde (al atardecer), noche (con los neones) u hora local
  * (según el reloj del visitante). Los colores de la página son claros de día, oscuros de noche y, de tarde,
  * oscuros con los acentos más claros para que se lean sobre el cielo del atardecer. Aplica la apariencia a la página (`data-theme` en `<html>`, del que cuelgan los colores) desde que
  * se monta, aunque el selector se muestre recién al terminar la intro ({@link ThemeToggleComponent.reveal}), y
@@ -16,14 +16,14 @@ import { DaylightDirector } from '../experience/DaylightDirector';
  */
 export class ThemeToggleComponent extends Component<HTMLDivElement> {
   private static readonly OPTIONS = [
-    { mode: ThemeMode.Light, glyph: '☀', label: 'Claro', hint: 'Modo claro: el puesto de día' },
+    { mode: ThemeMode.Light, glyph: '☀', label: 'Día', hint: 'Día: el puesto a pleno sol' },
     { mode: ThemeMode.Dusk, glyph: '◐', label: 'Tarde', hint: 'Tarde: el puesto al atardecer' },
-    { mode: ThemeMode.Dark, glyph: '☾', label: 'Oscuro', hint: 'Modo oscuro: el puesto de noche' },
+    { mode: ThemeMode.Dark, glyph: '☾', label: 'Noche', hint: 'Noche: el puesto con los neones' },
     {
       mode: ThemeMode.Local,
       glyph: '◷',
       label: 'Hora local',
-      hint: 'Según tu hora: de día claro, de tarde el atardecer y de noche oscuro',
+      hint: 'Según tu hora: de día, de tarde o de noche',
     },
   ];
   private static readonly PALETTES: ReadonlyMap<DayPhase, string> = new Map([
