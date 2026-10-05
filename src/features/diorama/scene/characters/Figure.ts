@@ -71,6 +71,7 @@ export abstract class Figure extends SceneObject implements Updatable {
   private static readonly EAR = { radius: 0.033, y: 0.115, squash: 0.5 };
   private static readonly FINISH = { roughness: 0.8, envMapIntensity: 0.45 };
   private static readonly DOWN = new Vector3(0, -1, 0);
+  private static readonly ACROSS = new Vector3(1, 0, 0);
   private static readonly REACH_MARGIN = 0.001;
 
   protected readonly joints: FigureJoints;
@@ -231,6 +232,22 @@ export abstract class Figure extends SceneObject implements Updatable {
     this.swing.setFromUnitVectors(this.current, this.desired);
     joint.parent?.getWorldQuaternion(this.parent).invert();
     joint.quaternion.copy(this.parent.multiply(this.swing).multiply(this.world));
+  }
+
+  /**
+   * Orienta una articulación (un tobillo) derecha respecto del personaje, sin importar cómo esté doblada la
+   * pierna, con una inclinación hacia adelante: así el pie queda plano en el suelo, o con la punta abajo al
+   * despegar y arriba al pisar de talón.
+   *
+   * @param joint Articulación.
+   * @param pitch Inclinación (positiva = punta abajo).
+   */
+  protected level(joint: Object3D, pitch: number): void {
+    this.root.updateMatrixWorld();
+    this.root.getWorldQuaternion(this.world);
+    this.world.multiply(this.swing.setFromAxisAngle(Figure.ACROSS, pitch));
+    joint.parent?.getWorldQuaternion(this.parent).invert();
+    joint.quaternion.copy(this.parent.multiply(this.world));
   }
 
   /**

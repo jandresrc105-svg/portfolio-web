@@ -1,20 +1,27 @@
 import { DoubleSide, Group, Mesh, MeshStandardMaterial, PlaneGeometry } from 'three';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { Updatable } from '@shared/engine/Updatable';
+import type { ShopFixture } from '../../models/ShopFixture';
 import { CanvasTextureFactory } from '../CanvasTextureFactory';
+import { ClosingRoutine } from '../ClosingRoutine';
+import { MeshPresence } from '../MeshPresence';
 
 /**
- * Cortinas de tela (noren) en la entrada del puesto, mecidas por el viento.
+ * Cortinas de tela (noren) en la entrada del puesto, mecidas por el viento. Al cerrar el local se enrollan hacia
+ * su barra (y al abrir se desenrollan).
  */
-export class Noren extends SceneObject implements Updatable {
+export class Noren extends SceneObject implements Updatable, ShopFixture {
   private static readonly GLYPHS = ['ら', 'ー', 'め', 'ん'];
   private static readonly PANEL = { width: 1.02, height: 0.72, gap: 0.04, y: 2.52, z: 1.63 };
   private static readonly CANVAS = { width: 256, height: 192, glyphSize: 132, glyphY: 118 };
   private static readonly CLOTH = '#1b2a52';
   private static readonly INK = '#f1ead9';
   private static readonly SWAY = { amplitude: 0.07, speed: 1.4, phase: 0.9 };
+  private static readonly ROLLED = 0.001;
 
   private readonly panels: Group[] = [];
+  private readonly presence = new MeshPresence(this.root);
+  private readonly routine = new ClosingRoutine();
 
   /**
    * Crea las cortinas.
@@ -28,7 +35,20 @@ export class Noren extends SceneObject implements Updatable {
   /**
    * @inheritdoc
    */
+  public setClosure(progress: number): void {
+    const rolled = this.routine.noren(progress);
+    const hanging = Math.max(1 - rolled, Noren.ROLLED);
+    this.panels.forEach((panel) => {
+      panel.scale.y = hanging;
+    });
+    this.presence.set(rolled < 1);
+  }
+
+  /**
+   * @inheritdoc
+   */
   public update(_delta: number, elapsed: number): void {
+    this.presence.enforce();
     const { amplitude, speed, phase } = Noren.SWAY;
     this.panels.forEach((panel, index) => {
       panel.rotation.x = Math.sin(elapsed * speed + index * phase) * amplitude - amplitude;

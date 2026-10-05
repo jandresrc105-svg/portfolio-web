@@ -16,7 +16,7 @@ export class DioramaExperienceFactory {
   private static readonly FONT_SAMPLES = [
     {
       font: `900 64px ${CanvasTextureFactory.JAPANESE_FONT}`,
-      text: 'ラーメンらめん麺灯醤油味噌豚骨塩餃子電子部品',
+      text: 'ラーメンらめん麺灯醤油味噌豚骨塩餃子電子部品準備中',
     },
     {
       font: `800 64px ${CanvasTextureFactory.MONO_FONT}`,

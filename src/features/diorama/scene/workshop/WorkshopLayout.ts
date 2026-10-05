@@ -58,10 +58,23 @@ export class WorkshopLayout {
   }
 
   /**
-   * Convierte un punto del espacio local del taller al de la escena.
+   * Convierte un punto del mundo al espacio del taller.
    *
-   * @param local Punto local.
-   * @returns Punto en la escena.
+   * @param world Punto en el mundo.
+   * @returns Punto en el espacio del taller.
+   */
+  public local(world: Vector3Like): Vector3 {
+    return new Vector3()
+      .copy(world)
+      .sub(WorkshopLayout.POSITION)
+      .applyAxisAngle(WorkshopLayout.UP, -WorkshopLayout.ROTATION_Y);
+  }
+
+  /**
+   * Convierte un punto del espacio del taller al mundo.
+   *
+   * @param local Punto en el espacio del taller.
+   * @returns Punto en el mundo.
    */
   public world(local: Vector3Like): Vector3 {
     return new Vector3()

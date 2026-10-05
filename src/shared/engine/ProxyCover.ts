@@ -3,11 +3,28 @@ import { Light, Line, Mesh, Points, Sprite, type Object3D } from 'three';
 /**
  * Subárboles que la versión unida cubre por completo: todo lo que dibujan está en los lotes y no tienen luces.
  * Mientras la versión unida está activa se ocultan enteros (`visible = false`), así three.js ni siquiera los
- * recorre al armar la lista de dibujo; al desactivarse se vuelven a mostrar solo los que se ocultaron aquí.
+ * recorre al armar la lista de dibujo; al desactivarse se vuelven a mostrar solo los que se ocultaron aquí. Las
+ * mallas que la pieza oculta y vuelve a mostrar ella misma ({@link ProxyCover.toggles}) nunca se cubren, ni ellas
+ * ni sus antecesores.
  */
 export class ProxyCover {
+  private static readonly TOGGLES = 'proxyCoverToggles';
+
   private covered: Object3D[] = [];
   private hidden: Object3D[] = [];
+
+  /**
+   * Marca un nodo que la pieza oculta y vuelve a mostrar por su cuenta (p. ej. el cocinero, que se va cuando el
+   * local cierra): la cubierta nunca lo oculta, ni a él ni a sus antecesores. Si ocultara el nodo, no se
+   * distinguiría cuándo lo ocultó la pieza (los cambios de visibilidad que hace la cubierta no cuentan) y su copia
+   * en el lote seguiría dibujándose; si ocultara un antecesor mientras el nodo está oculto, al volver a mostrarse
+   * seguiría sin verse.
+   *
+   * @param node Nodo que se oculta y se vuelve a mostrar.
+   */
+  public static toggles(node: Object3D): void {
+    node.userData[ProxyCover.TOGGLES] = true;
+  }
 
   /**
    * Calcula los subárboles cubiertos más altos.
@@ -64,7 +81,8 @@ export class ProxyCover {
    */
   private mark(node: Object3D, proxied: ReadonlySet<Object3D>, marks: Map<Object3D, boolean>): boolean {
     const children = node.children.map((child) => this.mark(child, proxied, marks));
-    const covered = !(node instanceof Light) && (!ProxyCover.draws(node) || proxied.has(node));
+    const fixed = !(node instanceof Light) && node.userData[ProxyCover.TOGGLES] !== true;
+    const covered = fixed && (!ProxyCover.draws(node) || proxied.has(node));
     const all = covered && children.every(Boolean);
     marks.set(node, all);
     return all;

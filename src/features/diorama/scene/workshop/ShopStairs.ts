@@ -1,4 +1,11 @@
-import { BoxGeometry, CylinderGeometry, Mesh, MeshStandardMaterial, type BufferGeometry } from 'three';
+import {
+  BoxGeometry,
+  CylinderGeometry,
+  Mesh,
+  MeshStandardMaterial,
+  type BufferGeometry,
+  type Vector3,
+} from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { SceneObject } from '@shared/engine/SceneObject';
@@ -16,6 +23,41 @@ export class ShopStairs extends SceneObject {
   private static readonly TREAD = { thickness: 0.03, overlap: 0.03 };
   private static readonly STRINGER = { width: 0.04, height: 0.16 };
   private static readonly RAIL = { radius: 0.018, height: 0.85, posts: 4, post: 0.014 };
+
+  /**
+   * Pisadas de la escalera en el mundo, del primer peldaño (abajo) al último (arriba): el centro de cada peldaño a
+   * la altura donde apoya el pie.
+   *
+   * @returns Pisadas.
+   */
+  public static footholds(): Vector3[] {
+    const { x, steps, run } = ShopStairs.FLIGHT;
+    const layout = new WorkshopLayout();
+    return Array.from({ length: steps }, (_, step) => {
+      const index = steps - 1 - step;
+      return layout.world({
+        x,
+        y: -ShopStairs.rise() * (index + 1),
+        z: ShopStairs.top() - run * (index + 0.5),
+      });
+    });
+  }
+
+  /**
+   * Punto del pasamanos (que va del lado de afuera, a la derecha de quien baja) a la altura de una z del mundo.
+   *
+   * @param z Posición en z del mundo.
+   * @param target Vector donde se escribe el punto.
+   * @returns El mismo vector, en el mundo.
+   */
+  public static rail(z: number, target: Vector3): Vector3 {
+    const layout = new WorkshopLayout();
+    const top = ShopStairs.top();
+    const local = Math.min(Math.max(layout.local({ x: 0, y: 0, z }).z, top - ShopStairs.run()), top);
+    const y = ShopStairs.RAIL.height - (ShopStairs.drop() * (top - local)) / ShopStairs.run();
+    const { x, width } = ShopStairs.FLIGHT;
+    return target.copy(layout.world({ x: x + width / 2, y, z: local }));
+  }
 
   /**
    * @inheritdoc

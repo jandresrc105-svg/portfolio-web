@@ -1,6 +1,7 @@
 import { Box3, Sphere, type Object3D } from 'three';
 import type { DetailAware } from './DetailAware';
 import type { PieceGroup } from './PieceGroup';
+import type { Roaming } from './Roaming';
 import { PoseJournal } from './PoseJournal';
 import type { Updatable } from './Updatable';
 
@@ -41,11 +42,15 @@ export class ScheduledPiece {
 
   /**
    * Esfera que envuelve la pieza en el mundo (se calcula una vez, la primera vez que se pide). Una pieza sin
-   * geometría (solo luces, p. ej.) no tiene esfera y siempre va a ritmo completo.
+   * geometría (solo luces, p. ej.) o que se desplaza ({@link Roaming}) no tiene esfera y siempre va a ritmo
+   * completo.
    *
-   * @returns Esfera, o `null` si la pieza está vacía.
+   * @returns Esfera, o `null` si la pieza está vacía o se desplaza.
    */
   public get bounds(): Sphere | null {
+    if ('roaming' in this.updatable && (this.updatable as Updatable & Roaming).roaming) {
+      return null;
+    }
     if (!this.sphere) {
       this.root.updateMatrixWorld(true);
       this.box.setFromObject(this.root);

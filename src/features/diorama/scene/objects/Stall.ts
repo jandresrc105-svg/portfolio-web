@@ -43,6 +43,17 @@ export class Stall extends SceneObject {
   }
 
   /**
+   * Altura de la cara inferior del techo inclinado en una profundidad dada.
+   *
+   * @param z Profundidad (coordenada z).
+   * @returns Altura de la cara inferior.
+   */
+  public static roofUnderside(z: number): number {
+    const { height, y, z: center, tilt } = Stall.ROOF;
+    return y - height / (2 * Math.cos(tilt)) - (z - center) * Math.tan(tilt);
+  }
+
+  /**
    * @inheritdoc
    */
   protected override build(): void {
@@ -163,16 +174,5 @@ export class Stall extends SceneObject {
     material: Material,
   ): Mesh {
     return this.add(new Mesh(new BoxGeometry(size.width, size.height, size.depth), material), position);
-  }
-
-  /**
-   * Altura de la cara inferior del techo inclinado en una profundidad dada.
-   *
-   * @param z Profundidad (coordenada z).
-   * @returns Altura de la cara inferior.
-   */
-  private static roofUnderside(z: number): number {
-    const { height, y, z: center, tilt } = Stall.ROOF;
-    return y - height / (2 * Math.cos(tilt)) - (z - center) * Math.tan(tilt);
   }
 }

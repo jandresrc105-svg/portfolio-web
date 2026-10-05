@@ -21,6 +21,7 @@ import { CanvasTextureFactory } from './CanvasTextureFactory';
 import { PowerGrid } from './PowerGrid';
 import { RenderTuning } from './RenderTuning';
 import { PowerGroup } from './PowerGroup';
+import { ShopHours } from './ShopHours';
 import { Storm } from './Storm';
 import type { MaterialLibrary } from './MaterialLibrary';
 import type { DioramaSceneOptions } from './DioramaSceneOptions';
@@ -53,6 +54,7 @@ import { SkyDome } from './objects/SkyDome';
 import { SkyLight } from './objects/SkyLight';
 import { Stall } from './objects/Stall';
 import { StallInterior } from './objects/StallInterior';
+import { StallShutter } from './objects/StallShutter';
 import { StreetMarkings } from './objects/StreetMarkings';
 import { StringLights } from './objects/StringLights';
 import { TrafficSignal } from './objects/TrafficSignal';
@@ -67,6 +69,7 @@ import { SolarController } from './workshop/SolarController';
 import { Workbench } from './workshop/Workbench';
 import { WorkshopCatalog } from './workshop/WorkshopCatalog';
 import { WorkshopLayout } from './workshop/WorkshopLayout';
+import { WorkStool } from './workshop/WorkStool';
 
 /**
  * Diorama completo (patrón Composite): crea cada pieza, la agrega a la escena y expone
@@ -154,6 +157,8 @@ export class DioramaScene {
   private readonly weather: Weather;
   private readonly audio: AudioEngine;
   private markerSet: HotspotMarkers | null = null;
+  private readonly hours = new ShopHours();
+  private readonly juan = new Juan();
 
   /**
    * Prepara el diorama.
@@ -367,28 +372,39 @@ export class DioramaScene {
       DioramaScene.TIMELINE.interior,
       PowerMode.Fade,
     );
-    this.animate(new Noren(this.textures));
+    this.hours.attach(this.animate(new Noren(this.textures)));
+    this.hours.attach(this.animate(new StallShutter(this.textures, this.materials)));
     if (this.weather.rain) {
       this.animate(new RoofDrips(this.random));
     }
     this.animate(new SideBlinds(this.textures));
     this.buildLife();
+    this.buildLanterns();
+  }
+
+  /**
+   * Faroles de papel a los lados de la entrada.
+   */
+  private buildLanterns(): void {
     DioramaScene.LANTERNS.forEach(({ anchor, glyph, phase, at }) => {
       const lantern = this.glow(
         this.animate(new Lantern(this.materials, this.textures, anchor, glyph, phase)),
       );
-      this.feed(lantern, at, PowerMode.Fade);
+      this.shopFeed(lantern, at, PowerMode.Fade);
     });
   }
 
   /**
-   * Vida dentro del puesto: cocina humeante, cocinero, comensal y guirnalda de bombillos.
+   * Vida dentro del puesto: cocina humeante, cocinero (que cierra el local de día y lo abre de tarde), Juan (que de
+   * día sube al taller) y guirnalda de bombillos.
    */
   private buildLife(): void {
     this.animate(new KitchenProps(this.materials, this.random));
-    this.animate(new Chef());
-    this.animate(new Juan());
-    this.feed(
+    this.hours.attach(this.animate(new Chef()));
+    this.daylit.push(this.hours, this.juan);
+    this.updatables.push(this.hours);
+    this.animate(this.juan);
+    this.shopFeed(
       this.glow(this.animate(new StringLights(this.materials))),
       DioramaScene.TIMELINE.interior,
       PowerMode.Fade,
@@ -400,11 +416,14 @@ export class DioramaScene {
    */
   private buildCounter(): void {
     this.mainSign = this.glow(this.animate(this.createMainSign()));
-    this.feed(this.mainSign, DioramaScene.TIMELINE.mainSign, PowerMode.Strike);
+    this.shopFeed(this.mainSign, DioramaScene.TIMELINE.mainSign, PowerMode.Strike);
     const side = this.glow(this.animate(this.createSideSign()));
-    this.feed(side, DioramaScene.TIMELINE.sideSign, PowerMode.Strike);
+    this.shopFeed(side, DioramaScene.TIMELINE.sideSign, PowerMode.Strike);
     this.daylit.push(this.mainSign, side);
-    this.animate(new RamenBowl(this.textures, this.random));
+    const bowl = this.animate(new RamenBowl(this.textures, this.random));
+    this.juan.onSeated((seated) => {
+      bowl.setServed(seated);
+    });
     this.animate(new ManekiNeko(this.textures));
   }
 
@@ -496,6 +515,7 @@ export class DioramaScene {
     const { workshop, workshopSign } = DioramaScene.TIMELINE;
     this.register(new ShopPlinth(this.materials));
     this.register(new ShopStairs());
+    this.register(new WorkStool(this.materials));
     this.power(new RepairShop(this.materials, this.textures), workshop, PowerMode.Fade);
     const sign = this.glow(this.animate(this.createWorkshopSign()));
     this.power(sign, workshopSign, PowerMode.Strike);
@@ -679,6 +699,21 @@ export class DioramaScene {
       this.register(object);
     }
     this.powerSteps.push({ target: this.grid.feed(object), at, mode });
+  }
+
+  /**
+   * Registra una luz del ramen: cuelga de la red de la calle a través del interruptor del local, así que se
+   * enciende en la intro, se apaga cuando el MAIN del poste corta la red y también de día, con el local cerrado.
+   *
+   * @param object Luz del local.
+   * @param at Segundo de la intro.
+   * @param mode Forma de encendido.
+   */
+  private shopFeed(object: SceneObject & Powerable, at: number, mode: PowerMode): void {
+    if (!this.objects.includes(object)) {
+      this.register(object);
+    }
+    this.powerSteps.push({ target: this.grid.feed(this.hours.wire(object)), at, mode });
   }
 
   /**

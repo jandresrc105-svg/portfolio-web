@@ -12,15 +12,23 @@ import {
   type Vector3Like,
 } from 'three';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
+import type { ShopFixture } from '../../models/ShopFixture';
+import { ClosingRoutine } from '../ClosingRoutine';
+import { StallShutter } from '../objects/StallShutter';
 import { Figure } from './Figure';
+import { Footsteps } from './Footsteps';
+import { StraightPath } from './StraightPath';
 
 /**
  * Maestro ramenero del puesto: de espaldas revuelve la olla de caldo con el cucharón y, cada cierto tiempo,
  * se voltea hacia la barra, asiente y saluda con la mano antes de volver a la olla. Chaqueta blanca con las
  * mangas recogidas, delantal índigo anudado a la cintura, hachimaki blanco con el nudo en la nuca, cabello
- * canoso y bigote.
+ * canoso y bigote. Él mismo cierra el local de día y lo abre de tarde, siguiendo el guion de
+ * {@link ClosingRoutine}: deja la olla y camina hasta la barra (con pisadas reales, {@link Footsteps}), estira los
+ * brazos al frente mientras se enrolla el noren, baja la cortina tirando de la correa y vuelve a la olla a seguir
+ * preparando el caldo detrás de la cortina; para abrir hace lo mismo al revés.
  */
-export class Chef extends Figure {
+export class Chef extends Figure implements ShopFixture {
   private static readonly OPTIONS = {
     placement: { position: { x: -0.55, y: 0, z: -0.72 }, rotationY: Math.PI },
     hips: 0.88,
@@ -73,6 +81,22 @@ export class Chef extends Figure {
   private static readonly APRON = { top: 0.15, bottom: 0.17, height: 0.55, y: -0.165, depth: 0.85, arc: 0.8 };
   private static readonly APRON_TIE = { radius: 0.141, tube: 0.014, y: 0.12, depth: 0.82, knot: 0.022 };
   private static readonly APRON_COLOR = 0x1d2745;
+  private static readonly KITCHEN = {
+    pot: { x: -0.55, y: 0, z: -0.72 },
+    front: { x: StallShutter.STRAP.x, y: 0, z: 0.08 },
+    ankle: 0.06,
+    turn: 0.3,
+  };
+  private static readonly STRIDE = { pelvis: -0.03, bob: 0.02, knee: 0.15, fade: 6 };
+  private static readonly REST_FOOT = { x: 0.085, y: 0.06, z: 0 };
+  private static readonly ARMS = {
+    rest: { x: 0.2, y: 0.8, z: 0.03 },
+    swing: 0.6,
+    up: { x: 0.28, y: 1.92, z: 0.72 },
+    grip: { apart: 0.04, high: 2.02, low: 1.2, inset: 0.03 },
+    elbow: { x: 0.3, y: -0.3, z: -1 },
+  };
+  private static readonly BODY = { reach: -0.12, pull: 0.18, walk: 0.04, lookUp: -0.35, lookDown: 0.15 };
   private static readonly LADLE = {
     handle: 0.32,
     radius: 0.007,
@@ -89,13 +113,27 @@ export class Chef extends Figure {
   private readonly target = new Vector3();
   private readonly pole = new Vector3();
   private readonly ladle = new Group();
+  private readonly closing = new ClosingRoutine();
+  private readonly path = new StraightPath(Chef.KITCHEN.pot, Chef.KITCHEN.front, Chef.KITCHEN.ankle);
+  private readonly steps = new Footsteps();
+  private readonly spot = new Vector3();
+  private readonly feet = [new Vector3(), new Vector3()];
   private facing = 0;
+  private closure = 0;
+  private walked: number | null = null;
 
   /**
    * Crea al cocinero.
    */
   public constructor() {
     super(Chef.OPTIONS);
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public setClosure(progress: number): void {
+    this.closure = progress;
   }
 
   /**
@@ -113,9 +151,27 @@ export class Chef extends Figure {
    * @inheritdoc
    */
   protected override animate(delta: number, elapsed: number): void {
+    const progress = this.closure;
+    if (progress > 0 && progress < 1) {
+      this.closeShop(progress);
+      return;
+    }
+    this.walked = null;
+    this.cook(delta, elapsed, progress < 1);
+  }
+
+  /**
+   * En la olla: revuelve el caldo y, con el local abierto, se voltea de vez en cuando a saludar a la barra.
+   *
+   * @param delta Segundos desde el frame anterior.
+   * @param elapsed Tiempo actual.
+   * @param open Si el local está abierto (cerrado no hay a quién saludar).
+   */
+  private cook(delta: number, elapsed: number, open: boolean): void {
     const { period, turn, back, rate, holdUntil } = Chef.ROUTINE;
     const cycle = elapsed % period;
-    const wanted = cycle > turn && cycle < back ? 1 : 0;
+    const wanted = open && cycle > turn && cycle < back ? 1 : 0;
+    this.root.position.copy(Chef.KITCHEN.pot);
     this.facing += (wanted - this.facing) * (1 - Math.exp(-rate * delta));
     this.root.rotation.y = Math.PI * (1 - this.facing);
     this.pose(elapsed);
@@ -125,6 +181,162 @@ export class Chef extends Figure {
     } else {
       this.restLadle();
     }
+  }
+
+  /**
+   * Cerrando (o abriendo) el local: camina entre la olla y la barra y, en la barra, enrolla el noren y baja (o
+   * sube) la cortina. El cucharón queda en la olla.
+   *
+   * @param progress Avance del cierre (0 = abierto, 1 = cerrado).
+   */
+  private closeShop(progress: number): void {
+    const back = this.closing.back(progress);
+    const returning = back > 0;
+    const travel = returning ? 1 - back : this.closing.out(progress);
+    this.walkTo(travel, returning);
+    this.handleShop(progress, travel);
+    this.restLadle();
+  }
+
+  /**
+   * Lleva el cuerpo por el camino entre la olla (0) y la barra (1): gira al arrancar y al llegar, y los pies
+   * pisan de verdad mientras camina.
+   *
+   * @param travel Dónde está del camino [0, 1].
+   * @param returning Si vuelve a la olla.
+   */
+  private walkTo(travel: number, returning: boolean): void {
+    const { turn } = Chef.KITCHEN;
+    const pathHeading = this.path.sample(travel * this.path.length, this.spot) + (returning ? Math.PI : 0);
+    const gone = returning ? 1 - travel : travel;
+    const start = returning ? 0 : Math.PI;
+    const end = returning ? Math.PI : 0;
+    const leaving = Chef.blendAngle(start, pathHeading, Chef.ease(gone, 0, turn));
+    this.root.rotation.y = Chef.blendAngle(leaving, end, Chef.ease(gone, 1 - turn, 1));
+    const weight = Math.min(Math.max(Math.min(travel, 1 - travel) * Chef.STRIDE.fade, 0), 1);
+    if (weight === 0) {
+      this.root.position.copy(this.spot);
+      this.walked = null;
+      return;
+    }
+    this.stride(travel * this.path.length, returning ? -1 : 1, weight);
+  }
+
+  /**
+   * Un tramo de caminata: avanza las pisadas lo que avanzó el cuerpo, ubica la cadera entre los pies (con el sube y
+   * baja de cada paso) y lleva cada pierna a su pisada.
+   *
+   * @param distance Metros recorridos desde la olla.
+   * @param direction 1 hacia la barra, -1 hacia la olla.
+   * @param weight Cuánto está caminando [0, 1] (se desvanece al arrancar y al llegar).
+   */
+  private stride(distance: number, direction: number, weight: number): void {
+    if (this.walked === null) {
+      this.plantFeet();
+      this.walked = distance;
+    }
+    this.steps.advance(this.path, distance, direction, Math.abs(distance - this.walked));
+    this.walked = distance;
+    const { pelvis, bob } = Chef.STRIDE;
+    const lift = pelvis + bob * Math.sin(Math.PI * this.steps.stride);
+    this.root.position.set(
+      this.spot.x,
+      this.steps.support() - Chef.KITCHEN.ankle + lift * weight,
+      this.spot.z,
+    );
+    this.root.updateMatrixWorld();
+    [1, -1].forEach((side, index) => {
+      this.stepLeg(side, index, weight);
+    });
+  }
+
+  /**
+   * Apoya los dos pies donde están parados, para empezar a caminar.
+   */
+  private plantFeet(): void {
+    this.root.position.copy(this.spot);
+    this.root.updateMatrixWorld();
+    const [left, right] = [1, -1].map((side) => this.root.localToWorld(this.restFoot(side, new Vector3())));
+    this.steps.place(left ?? this.spot, right ?? this.spot);
+  }
+
+  /**
+   * Lleva una pierna a su pisada (de a poco desde la pierna derecha y quieta al arrancar y al llegar).
+   *
+   * @param side 1 = izquierda, -1 = derecha.
+   * @param index Posición del pie.
+   * @param weight Cuánto está caminando [0, 1].
+   */
+  private stepLeg(side: number, index: number, weight: number): void {
+    const leg = side > 0 ? this.joints.legLeft : this.joints.legRight;
+    const foot = this.root.worldToLocal(this.steps.foot(side, this.feet[index] ?? this.spot));
+    foot.lerp(this.restFoot(side, this.target), 1 - weight);
+    const { knee } = Chef.STRIDE;
+    this.reach(leg, foot, this.pole.set(side * knee, knee, 1));
+    this.level(leg.end, this.steps.pitch(side) * weight);
+  }
+
+  /**
+   * Manos y torso: los brazos se mecen al caminar; en la barra suben al frente mientras se enrolla el noren y
+   * toman la correa de la cortina para bajarla (o la empujan para subirla).
+   *
+   * @param progress Avance del cierre.
+   * @param travel Dónde está del camino [0, 1].
+   */
+  private handleShop(progress: number, travel: number): void {
+    const reaching = this.closing.hands(progress, 'noren');
+    const pulling = this.closing.hands(progress, 'pull');
+    const walking = travel > 0 && travel < 1 ? 1 : 0;
+    const { reach, pull, walk, lookUp, lookDown } = Chef.BODY;
+    this.joints.torso.rotation.x = reach * reaching + pull * pulling + walk * walking;
+    this.joints.head.rotation.x = lookUp * reaching + lookDown * pulling;
+    const barY = StallShutter.barHeight(this.closing.pull(progress));
+    [1, -1].forEach((side, index) => {
+      this.handTarget(side, (walking * ((this.feet[1 - index]?.z ?? 0) - (this.feet[index]?.z ?? 0))) / 2);
+      this.target.lerp(this.spot.set(side * Chef.ARMS.up.x, Chef.ARMS.up.y, Chef.ARMS.up.z), reaching);
+      this.target.lerp(this.strap(side, barY, this.spot), pulling);
+      this.pole.set(side * Chef.ARMS.elbow.x, Chef.ARMS.elbow.y, Chef.ARMS.elbow.z);
+      this.reach(side > 0 ? this.joints.armLeft : this.joints.armRight, this.target, this.pole);
+    });
+  }
+
+  /**
+   * Mano colgando a un costado, mecida al revés que la pierna de su lado mientras camina.
+   *
+   * @param side 1 = izquierda, -1 = derecha.
+   * @param swing Cuánto va adelante la pierna contraria.
+   */
+  private handTarget(side: number, swing: number): void {
+    const { rest } = Chef.ARMS;
+    this.target.set(side * rest.x, rest.y, rest.z + swing * Chef.ARMS.swing);
+  }
+
+  /**
+   * Dónde toma la correa una mano (en el espacio del cocinero): del extremo de la correa mientras la cortina está
+   * alta y, cuando baja, de más arriba, sin pasar por debajo de la cintura.
+   *
+   * @param side 1 = izquierda, -1 = derecha.
+   * @param barY Altura de la barra de la cortina.
+   * @param target Vector donde se escribe el punto.
+   * @returns El mismo vector.
+   */
+  private strap(side: number, barY: number, target: Vector3): Vector3 {
+    const { x, z, length } = StallShutter.STRAP;
+    const { apart, high, low, inset } = Chef.ARMS.grip;
+    const y = Math.min(Math.max(barY - length, low), high);
+    return this.root.worldToLocal(target.set(x + side * apart, y, z - inset));
+  }
+
+  /**
+   * Tobillo de pie, sin caminar (pierna derecha bajo la cadera).
+   *
+   * @param side 1 = izquierdo, -1 = derecho.
+   * @param target Vector donde se escribe el punto (en el espacio del cocinero).
+   * @returns El mismo vector.
+   */
+  private restFoot(side: number, target: Vector3): Vector3 {
+    const { x, y, z } = Chef.REST_FOOT;
+    return target.set(side * x, y, z);
   }
 
   /**
@@ -352,5 +564,30 @@ export class Chef extends Figure {
       Math.PI / 2,
       Math.PI / 2,
     );
+  }
+
+  /**
+   * Mezcla dos ángulos por el camino más corto.
+   *
+   * @param from Ángulo inicial.
+   * @param to Ángulo final.
+   * @param t Mezcla [0, 1].
+   * @returns Ángulo mezclado.
+   */
+  private static blendAngle(from: number, to: number, t: number): number {
+    return from + Math.atan2(Math.sin(to - from), Math.cos(to - from)) * t;
+  }
+
+  /**
+   * Curva suave de 0 a 1.
+   *
+   * @param value Entrada.
+   * @param from Inicio de la subida.
+   * @param to Fin de la subida.
+   * @returns Valor en [0, 1].
+   */
+  private static ease(value: number, from: number, to: number): number {
+    const t = Math.min(Math.max((value - from) / (to - from), 0), 1);
+    return t * t * (3 - 2 * t);
   }
 }

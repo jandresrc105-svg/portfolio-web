@@ -21,6 +21,7 @@ import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import type { Updatable } from '@shared/engine/Updatable';
 import type { CanvasTextureFactory } from '../CanvasTextureFactory';
+import { MeshPresence } from '../MeshPresence';
 import { Steam } from './Steam';
 
 /**
@@ -74,6 +75,7 @@ export class RamenBowl extends SceneObject implements Updatable {
   };
 
   private readonly steam: Steam;
+  private readonly presence = new MeshPresence(this.root);
 
   /**
    * Crea el bol.
@@ -93,7 +95,19 @@ export class RamenBowl extends SceneObject implements Updatable {
    * @inheritdoc
    */
   public update(delta: number, elapsed: number): void {
-    this.steam.update(delta, elapsed);
+    this.presence.enforce();
+    if (this.presence.shown) {
+      this.steam.update(delta, elapsed);
+    }
+  }
+
+  /**
+   * Sirve el tazón (cuando Juan se sienta a comer) o lo retira (cuando se levanta).
+   *
+   * @param served `true` si está servido.
+   */
+  public setServed(served: boolean): void {
+    this.presence.set(served);
   }
 
   /**
