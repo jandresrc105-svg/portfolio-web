@@ -1,3 +1,4 @@
+import type { DayPhase } from './DayPhase';
 import type { ThemeMode } from './ThemeMode';
 
 /**
@@ -6,6 +7,6 @@ import type { ThemeMode } from './ThemeMode';
 export interface ThemeState {
   /** Modo elegido por el visitante. */
   readonly mode: ThemeMode;
-  /** Si se muestra de día (modo claro, o la hora local cae de día). */
-  readonly day: boolean;
+  /** Momento del día que se muestra (el del modo, o el de la hora local). */
+  readonly phase: DayPhase;
 }

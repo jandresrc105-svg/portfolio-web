@@ -1,17 +1,24 @@
+import { DayPhase } from './DayPhase';
 import { ThemeMode } from './ThemeMode';
 import type { ThemeState } from './ThemeState';
 import type { ThemeStore } from './ThemeStore';
 
 /**
- * Apariencia de la página (patrón Observer): guarda el modo que eligió el visitante y decide si se muestra de
- * día o de noche. En el modo de hora local es de día entre las 7:00 y las 19:00 de su reloj; quien muestre la
- * apariencia llama a {@link ThemeService.refresh} de vez en cuando para que el cambio llegue solo.
+ * Apariencia de la página (patrón Observer): guarda el modo que eligió el visitante y decide qué momento del
+ * día se muestra. En el modo de hora local, según su reloj, es de día de 7:00 a 17:00, de tarde de 17:00 a
+ * 19:00 y de noche el resto; quien muestre la apariencia llama a {@link ThemeService.refresh} de vez en cuando
+ * para que el cambio llegue solo.
  */
 export class ThemeService {
-  private static readonly DAY_HOURS = { from: 7, until: 19 };
+  private static readonly HOURS = { morning: 7, afternoon: 17, evening: 19 };
+  private static readonly FIXED: ReadonlyMap<ThemeMode, DayPhase> = new Map([
+    [ThemeMode.Light, DayPhase.Day],
+    [ThemeMode.Dusk, DayPhase.Dusk],
+    [ThemeMode.Dark, DayPhase.Night],
+  ]);
 
   private mode: ThemeMode;
-  private day: boolean;
+  private phase: DayPhase;
   private readonly listeners = new Set<(state: ThemeState) => void>();
 
   /**
@@ -25,16 +32,16 @@ export class ThemeService {
     private readonly clock: () => Date = (): Date => new Date(),
   ) {
     this.mode = store.load();
-    this.day = this.resolveDay();
+    this.phase = this.resolvePhase();
   }
 
   /**
    * Apariencia vigente.
    *
-   * @returns Modo y si es de día.
+   * @returns Modo y momento del día.
    */
   public get state(): ThemeState {
-    return { mode: this.mode, day: this.day };
+    return { mode: this.mode, phase: this.phase };
   }
 
   /**
@@ -62,33 +69,37 @@ export class ThemeService {
     }
     this.mode = mode;
     this.store.save(mode);
-    this.day = this.resolveDay();
+    this.phase = this.resolvePhase();
     this.notify();
   }
 
   /**
-   * Vuelve a mirar la hora: en el modo de hora local, avisa si pasó de día a noche o al revés.
+   * Vuelve a mirar la hora: en el modo de hora local, avisa si cambió el momento del día.
    */
   public refresh(): void {
-    const day = this.resolveDay();
-    if (day !== this.day) {
-      this.day = day;
+    const phase = this.resolvePhase();
+    if (phase !== this.phase) {
+      this.phase = phase;
       this.notify();
     }
   }
 
   /**
-   * Si corresponde mostrar el día con el modo actual.
+   * Momento del día del modo actual.
    *
-   * @returns `true` si es de día.
+   * @returns Momento del día.
    */
-  private resolveDay(): boolean {
-    if (this.mode !== ThemeMode.Local) {
-      return this.mode === ThemeMode.Light;
+  private resolvePhase(): DayPhase {
+    const fixed = ThemeService.FIXED.get(this.mode);
+    if (fixed) {
+      return fixed;
     }
     const hour = this.clock().getHours();
-    const { from, until } = ThemeService.DAY_HOURS;
-    return hour >= from && hour < until;
+    const { morning, afternoon, evening } = ThemeService.HOURS;
+    if (hour >= morning && hour < afternoon) {
+      return DayPhase.Day;
+    }
+    return hour >= afternoon && hour < evening ? DayPhase.Dusk : DayPhase.Night;
   }
 
   /**

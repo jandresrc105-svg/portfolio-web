@@ -24,6 +24,19 @@ $palette-light: (
   'shade': #fff,
   'depth': #a9d0f2,
 );
+$palette-dusk: (
+  'night': #05060c,
+  'surface': #0d0f18,
+  'text': #fff6f2,
+  'muted': #f6e3e3,
+  'neon': #ffd3e4,
+  'cyan': #c9f5ff,
+  'lantern': #ffe2b8,
+  'terminal': #c8ffe2,
+  'trace': #fff1a8,
+  'shade': #2b0f19,
+  'depth': #8a3f4f,
+);
 $glass-dark: (
   'background': rgba(10, 11, 20, 0.58),
   'border': rgba(255, 255, 255, 0.09),

@@ -14,6 +14,7 @@ import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import type { Powerable } from '../../models/Powerable';
 import type { DaylightAware } from '../../models/DaylightAware';
+import { PhotoCell } from '../PhotoCell';
 import type { MaterialLibrary } from '../MaterialLibrary';
 
 /**
@@ -60,6 +61,7 @@ export class UtilityPole extends SceneObject implements Powerable, DaylightAware
   );
   private power = 0;
   private night = 1;
+  private readonly cell = new PhotoCell();
 
   /**
    * Crea el poste.
@@ -82,7 +84,7 @@ export class UtilityPole extends SceneObject implements Powerable, DaylightAware
    * @inheritdoc
    */
   public setDaylight(level: number): void {
-    this.night = 1 - level;
+    this.night = this.cell.lamp(level);
     this.refresh();
   }
 
@@ -107,7 +109,7 @@ export class UtilityPole extends SceneObject implements Powerable, DaylightAware
   }
 
   /**
-   * Brillo de la farola: encendida según la red y solo de noche (de día la apaga su fotocelda).
+   * Brillo de la farola: encendida según la red y desde la tarde (de día la apaga su fotocelda).
    */
   private refresh(): void {
     const level = this.power * this.night;

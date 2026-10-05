@@ -18,7 +18,7 @@ export class NeonSign extends SceneObject implements Updatable, Powerable, Dayli
   private static readonly TUBE = { glow: 26, core: '#fff4fa', lineWidth: 5 };
   private static readonly LIGHT_OFFSET = 0.55;
   private static readonly EDGE_FADE = 0.16;
-  private static readonly DAY_SWAP = 0.5;
+  private static readonly DAY_SWAP = 0.75;
 
   private readonly material = new MeshBasicMaterial({
     transparent: true,
@@ -57,7 +57,7 @@ export class NeonSign extends SceneObject implements Updatable, Powerable, Dayli
    * como un fantasma, así que se dibuja encima como el vidrio de color que es. Solo cambia la mezcla (estado de
    * la GPU): no recompila el shader.
    *
-   * @param level Momento del día (0 = noche, 1 = día).
+   * @param level Momento del día (0 = noche, 0,5 = tarde, 1 = día); de tarde todavía brilla.
    */
   public setDaylight(level: number): void {
     this.material.blending = level < NeonSign.DAY_SWAP ? AdditiveBlending : NormalBlending;

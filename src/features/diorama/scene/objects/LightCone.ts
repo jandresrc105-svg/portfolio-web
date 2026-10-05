@@ -3,13 +3,14 @@ import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import { SceneObject } from '@shared/engine/SceneObject';
 import type { DaylightAware } from '../../models/DaylightAware';
 import type { Powerable } from '../../models/Powerable';
+import { PhotoCell } from '../PhotoCell';
 import fragmentShader from '../shaders/cone.frag.glsl?raw';
 import vertexShader from '../shaders/cone.vert.glsl?raw';
 
 /**
  * Haz de luz volumétrico falso bajo la farola: un cono aditivo que se desvanece hacia el suelo y en los bordes.
- * Da la sensación de luz atravesando la lluvia sin el costo de un volumen real. De día no se ve: a pleno sol
- * el haz se pierde.
+ * Da la sensación de luz atravesando la lluvia sin el costo de un volumen real. Se ve desde la tarde; a pleno
+ * sol el haz se pierde.
  */
 export class LightCone extends SceneObject implements Powerable, DaylightAware {
   private static readonly APEX = { x: -5.05, y: 4.42, z: -0.95 };
@@ -21,6 +22,7 @@ export class LightCone extends SceneObject implements Powerable, DaylightAware {
   private readonly intensity = { value: 0 };
   private power = 0;
   private night = 1;
+  private readonly cell = new PhotoCell();
 
   /**
    * @inheritdoc
@@ -34,7 +36,7 @@ export class LightCone extends SceneObject implements Powerable, DaylightAware {
    * @inheritdoc
    */
   public setDaylight(level: number): void {
-    this.night = 1 - level;
+    this.night = this.cell.lamp(level);
     this.refresh();
   }
 

@@ -29,6 +29,7 @@ import { CanvasTextureFactory } from '../scene/CanvasTextureFactory';
 import { DioramaScene } from '../scene/DioramaScene';
 import { MaterialLibrary } from '../scene/MaterialLibrary';
 import { DayEnvironment } from '../scene/DayEnvironment';
+import { DuskEnvironment } from '../scene/DuskEnvironment';
 import type { EnvironmentRoom } from '../scene/EnvironmentRoom';
 import { NeonEnvironment } from '../scene/NeonEnvironment';
 import type { HotspotMarker } from '../scene/objects/HotspotMarker';
@@ -614,12 +615,14 @@ export class DioramaExperience {
   }
 
   /**
-   * Hornea los mapas de entorno de la noche (reflejos de neón) y del día (cielo y sol), y sigue a la apariencia
-   * de la página: la escena arranca en el momento vigente y cambia con un amanecer o un atardecer.
+   * Hornea los mapas de entorno de la noche (reflejos de neón), la tarde (atardecer) y el día (cielo y sol), y
+   * sigue a la apariencia de la página: la escena arranca en el momento vigente y cambia con un amanecer o un
+   * atardecer.
    */
   private bakeEnvironments(): void {
     const environments = {
       night: DioramaExperience.bake(this.stage, new NeonEnvironment()),
+      dusk: DioramaExperience.bake(this.stage, new DuskEnvironment()),
       day: DioramaExperience.bake(this.stage, new DayEnvironment()),
     };
     const wake = (): void => {
@@ -628,8 +631,8 @@ export class DioramaExperience {
     const daylight = new DaylightDirector(this.stage, environments, this.diorama.daylit, wake);
     this.daylight = daylight;
     let first = true;
-    this.unsubscribeTheme = this.theme.onChange(({ day }) => {
-      daylight.show(day, first);
+    this.unsubscribeTheme = this.theme.onChange(({ phase }) => {
+      daylight.show(phase, first);
       first = false;
     });
   }

@@ -6,6 +6,10 @@
   color-scheme: dark;
 }
 
+:root[data-theme='dusk'] {
+  @include palette($palette-dusk, $glass-dark);
+}
+
 :root[data-theme='light'] {
   @include palette($palette-light, $glass-light);
 
