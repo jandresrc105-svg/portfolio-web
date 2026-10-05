@@ -5,11 +5,13 @@ import type { FeatureModule } from '@shared/core/di/FeatureModule';
 import { AppEventBus } from '@shared/core/events/AppEventBus';
 import { SectionNavigator } from '@shared/core/navigation/SectionNavigator';
 import { QualityDetector } from '@shared/engine/QualityDetector';
+import { ThemeService } from '@shared/theme/ThemeService';
 import { BootScreenComponent } from './components/BootScreenComponent';
 import { DioramaComponent } from './components/DioramaComponent';
 import { SectionNavComponent } from './components/SectionNavComponent';
 import { PerfHudComponent } from './components/PerfHudComponent';
 import { SoundToggleComponent } from './components/SoundToggleComponent';
+import { ThemeToggleComponent } from './components/ThemeToggleComponent';
 import { DioramaExperienceFactory } from './experience/DioramaExperienceFactory';
 import { BreakerPanelService } from './services/BreakerPanelService';
 import { PayPhoneService } from './services/PayPhoneService';
@@ -59,6 +61,7 @@ export class DioramaModule implements FeatureModule {
       container.resolve(QualityDetector),
       DioramaModule.devices(container),
       container.resolve(AudioEngine),
+      container.resolve(ThemeService),
     );
   }
 
@@ -86,6 +89,7 @@ export class DioramaModule implements FeatureModule {
     container
       .transient(BootScreenComponent, () => new BootScreenComponent())
       .transient(SoundToggleComponent, (c) => new SoundToggleComponent(c.resolve(AudioEngine)))
+      .transient(ThemeToggleComponent, (c) => new ThemeToggleComponent(c.resolve(ThemeService)))
       .transient(SectionNavComponent, (c) => new SectionNavComponent(c.resolve(SectionNavigator)))
       .transient(PerfHudComponent, () => new PerfHudComponent())
       .transient(DioramaComponent, (c) => DioramaModule.diorama(c));
@@ -106,6 +110,7 @@ export class DioramaModule implements FeatureModule {
       {
         boot: container.resolve(BootScreenComponent),
         soundToggle: container.resolve(SoundToggleComponent),
+        themeToggle: container.resolve(ThemeToggleComponent),
         nav: container.resolve(SectionNavComponent),
         perf: container.resolve(PerfHudComponent),
       },

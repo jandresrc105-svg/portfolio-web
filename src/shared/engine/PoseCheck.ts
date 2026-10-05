@@ -38,6 +38,7 @@ export class PoseCheck {
       }
     };
     PoseCheck.watchStructure(journal);
+    PoseCheck.keepPending();
   }
 
   /**
@@ -97,6 +98,35 @@ export class PoseCheck {
     values[s] = scale.x;
     values[s + 1] = scale.y;
     values[s + 2] = scale.z;
+  }
+
+  /**
+   * Hace que pedir la matriz del mundo de un objeto (`getWorldPosition`, `getWorldQuaternion`, etc., que
+   * recalculan solo la cadena de antecesores) no consuma el aviso de que hay que recalcular su subárbol. three.js
+   * borra `matrixWorldNeedsUpdate` en cada antecesor de la cadena sin actualizar a sus otros hijos; sin la
+   * revisión no importa, porque `updateMatrix` vuelve a marcarlo en cada frame, pero aquí se marca una sola vez
+   * (cuando cambia la pose) y, consumido, el resto del subárbol quedaba con la matriz vieja (p. ej. un personaje
+   * que gira y calcula su cinemática inversa antes del recorrido de matrices: giraba solo el brazo). Además
+   * recalcula siempre la matriz del mundo de la cadena, porque un antecesor pudo cambiar sin marcar a sus hijos.
+   */
+  private static keepPending(): void {
+    const prototype = Object3D.prototype;
+    const update = Reflect.get(prototype, 'updateWorldMatrix');
+    prototype.updateWorldMatrix = function updateWorldMatrix(
+      this: Object3D,
+      updateParents: boolean,
+      updateChildren: boolean,
+    ): void {
+      if (updateParents && this.parent !== null) {
+        this.parent.updateWorldMatrix(true, false);
+      }
+      if (this.matrixAutoUpdate) {
+        this.updateMatrix();
+      }
+      const pending = this.matrixWorldNeedsUpdate;
+      update.call(this, false, updateChildren, true);
+      this.matrixWorldNeedsUpdate = pending && !updateChildren;
+    };
   }
 
   /**

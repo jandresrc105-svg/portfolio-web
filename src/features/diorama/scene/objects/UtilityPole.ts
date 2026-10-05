@@ -13,13 +13,15 @@ import {
 import { SceneObject } from '@shared/engine/SceneObject';
 import { GeometryDetail } from '@shared/engine/GeometryDetail';
 import type { Powerable } from '../../models/Powerable';
+import type { DaylightAware } from '../../models/DaylightAware';
+import { PhotoCell } from '../PhotoCell';
 import type { MaterialLibrary } from '../MaterialLibrary';
 
 /**
  * Poste eléctrico con farola, transformador y cables colgantes. El tablero de la trayectoria va aparte
  * (`BreakerPanel`), montado en el poste.
  */
-export class UtilityPole extends SceneObject implements Powerable {
+export class UtilityPole extends SceneObject implements Powerable, DaylightAware {
   private static readonly BASE = { x: -3.75, z: -0.95 };
   private static readonly POLE = { radius: 0.11, top: 0.08, height: 6.6 };
   private static readonly ARMS = [
@@ -57,6 +59,9 @@ export class UtilityPole extends SceneObject implements Powerable {
     UtilityPole.SPOT.penumbra,
     2,
   );
+  private power = 0;
+  private night = 1;
+  private readonly cell = new PhotoCell();
 
   /**
    * Crea el poste.
@@ -71,10 +76,16 @@ export class UtilityPole extends SceneObject implements Powerable {
    * @inheritdoc
    */
   public setPower(level: number): void {
-    this.lamp.color
-      .set(UtilityPole.LAMP.color)
-      .multiplyScalar(Math.max(level * UtilityPole.LAMP_GLOW, UtilityPole.OFF_GLOW));
-    this.spot.intensity = level * UtilityPole.LAMP.intensity;
+    this.power = level;
+    this.refresh();
+  }
+
+  /**
+   * @inheritdoc
+   */
+  public setDaylight(level: number): void {
+    this.night = this.cell.lamp(level);
+    this.refresh();
   }
 
   /**
@@ -95,6 +106,17 @@ export class UtilityPole extends SceneObject implements Powerable {
     this.buildWires();
     this.root.position.set(UtilityPole.BASE.x, 0, UtilityPole.BASE.z);
     this.setPower(0);
+  }
+
+  /**
+   * Brillo de la farola: encendida según la red y desde la tarde (de día la apaga su fotocelda).
+   */
+  private refresh(): void {
+    const level = this.power * this.night;
+    this.lamp.color
+      .set(UtilityPole.LAMP.color)
+      .multiplyScalar(Math.max(level * UtilityPole.LAMP_GLOW, UtilityPole.OFF_GLOW));
+    this.spot.intensity = level * UtilityPole.LAMP.intensity;
   }
 
   /**

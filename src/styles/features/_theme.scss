@@ -1,0 +1,88 @@
+@use '../abstracts' as *;
+
+.theme-toggle {
+  position: fixed;
+  top: $space-md;
+  right: $space-md;
+  z-index: $z-tooltip;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid $glass-border;
+  border-radius: $radius-pill;
+  background: $glass-background;
+  backdrop-filter: blur($glass-blur);
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-12px);
+  transition:
+    opacity 0.8s $ease-out,
+    transform 0.8s $ease-out,
+    visibility 0.8s,
+    background $theme-fade ease,
+    border-color $theme-fade ease;
+
+  &--visible {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+
+  &__option {
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
+    padding: $space-xs $space-sm;
+    border: 0;
+    border-radius: $radius-pill;
+    background: none;
+    color: $color-muted;
+    font-family: $font-mono;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      color 0.2s ease,
+      background 0.2s ease;
+
+    &:hover,
+    &:focus-visible {
+      color: $color-text;
+      outline: none;
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 1px tint('cyan', 0.6);
+    }
+
+    &--active {
+      background: tint('cyan', 0.16);
+      color: $color-cyan;
+    }
+  }
+
+  &__glyph {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  &__label {
+    display: none;
+  }
+
+  @include from('sm') {
+    &__label {
+      display: inline;
+    }
+  }
+
+  @include from('md') {
+    top: $space-lg;
+    right: $space-lg;
+  }
+
+  @include reduced-motion {
+    transform: none;
+  }
+}

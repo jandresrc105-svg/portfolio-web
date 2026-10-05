@@ -51,11 +51,18 @@ export class Chef extends Figure {
     nodSpeed: 6,
   };
   private static readonly ROUTINE = { period: 16, turn: 9, back: 13.5, rate: 3.2, holdUntil: 0.5 };
-  private static readonly HAIR = { radius: 0.144, cover: 0.58, y: 0.125, z: -0.015, tilt: -0.4 };
+  private static readonly HAIR = {
+    radius: 0.147,
+    cover: 0.52,
+    y: 0.12,
+    z: -0.006,
+    tilt: -0.64,
+    narrow: 0.96,
+  };
   private static readonly HEADBAND = {
-    band: { radius: 0.142, tube: 0.02, y: 0.165, z: -0.005, tilt: 0.12 },
-    knot: { radius: 0.028, y: 0.155, z: -0.15 },
-    tail: { width: 0.035, length: 0.09, thickness: 0.01, y: 0.15, z: -0.155, spread: 0.4, offset: 0.015 },
+    band: { radius: 0.146, tube: 0.016, y: 0.168, z: -0.013, tilt: -0.29 },
+    knot: { radius: 0.026, y: 0.128, z: -0.158 },
+    tail: { width: 0.035, length: 0.09, thickness: 0.01, y: 0.122, z: -0.164, spread: 0.4, offset: 0.015 },
     color: 0xcfc9bd,
   };
   private static readonly MUSTACHE = [
@@ -63,8 +70,8 @@ export class Chef extends Figure {
     { x: 0.028, tilt: -1.15 },
   ];
   private static readonly WHISKER = { radius: 0.012, length: 0.03, y: 0.073, z: 0.127 };
-  private static readonly APRON = { top: 0.17, bottom: 0.2, height: 0.62, y: 0.02, depth: 0.8, arc: 0.85 };
-  private static readonly APRON_TIE = { radius: 0.143, tube: 0.014, y: 0.3, depth: 0.84 };
+  private static readonly APRON = { top: 0.15, bottom: 0.17, height: 0.55, y: -0.165, depth: 0.85, arc: 0.8 };
+  private static readonly APRON_TIE = { radius: 0.141, tube: 0.014, y: 0.12, depth: 0.82, knot: 0.022 };
   private static readonly APRON_COLOR = 0x1d2745;
   private static readonly LADLE = {
     handle: 0.32,
@@ -179,18 +186,21 @@ export class Chef extends Figure {
   }
 
   /**
-   * Cabello corto y canoso.
+   * Cabello corto y canoso: casquete algo más grande que la cabeza (para que no la atraviese), inclinado hacia
+   * atrás para dejar la frente libre y bajar hasta la nuca, y un poco más angosto a los lados para que se vean
+   * las orejas.
    */
   private buildHair(): void {
-    const { radius, cover, y, z, tilt } = Chef.HAIR;
+    const { radius, cover, y, z, tilt, narrow } = Chef.HAIR;
     const shell = Figure.shell(radius, cover);
     const hair = this.part(this.joints.head, shell, this.cloth(this.options.palette.hair), { x: 0, y, z });
     hair.rotation.x = tilt;
+    hair.scale.x = narrow;
   }
 
   /**
-   * Hachimaki: banda de tela blanca alrededor de la frente, con el nudo y las dos puntas en la nuca (lo
-   * primero que se ve, porque cocina de espaldas).
+   * Hachimaki: banda de tela blanca ceñida sobre el cabello, más alta en la frente que en la nuca, con el nudo
+   * y las dos puntas atrás (lo primero que se ve, porque cocina de espaldas).
    */
   private buildHeadband(): void {
     const { band, knot, color } = Chef.HEADBAND;
@@ -229,8 +239,9 @@ export class Chef extends Figure {
   }
 
   /**
-   * Delantal índigo: paño curvo que cubre el frente desde el pecho hasta los muslos, con la cinta
-   * anudada alrededor de la cintura.
+   * Delantal índigo (maekake): paño curvo que cubre el frente desde la cintura hasta las rodillas, con la
+   * cinta anudada alrededor de la cintura. Arranca bajo el pecho para que el torso, al inclinarse, no lo
+   * atraviese.
    */
   private buildApron(): void {
     const { top, bottom, height, y, depth, arc } = Chef.APRON;
@@ -251,21 +262,29 @@ export class Chef extends Figure {
   }
 
   /**
-   * Cinta del delantal alrededor de la cintura.
+   * Cinta del delantal ceñida a la cintura, con el nudo en la espalda. Va en el torso para seguirlo cuando se
+   * inclina o respira; adelante queda tapada por el borde del delantal.
    *
    * @param fabric Tela del delantal.
    */
   private buildApronTie(fabric: MeshStandardMaterial): void {
-    const { radius, tube, y, depth } = Chef.APRON_TIE;
+    const { radius, tube, y, depth, knot } = Chef.APRON_TIE;
     const girth = this.options.girth;
+    const torso = this.joints.torso;
     const band = this.part(
-      this.joints.hips,
+      torso,
       new TorusGeometry(radius, tube, GeometryDetail.Thin, GeometryDetail.Curve),
       fabric,
       { x: 0, y, z: 0 },
     );
     band.rotation.x = Math.PI / 2;
     band.scale.set(girth, depth * girth, 1);
+    const back = -radius * depth * girth;
+    this.part(torso, new SphereGeometry(knot, GeometryDetail.Low, GeometryDetail.Thin), fabric, {
+      x: 0,
+      y,
+      z: back,
+    });
   }
 
   /**
